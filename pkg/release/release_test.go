@@ -1,10 +1,10 @@
-package chartsutil_test
+package release_test
 
 import (
 	"regexp"
 	"testing"
 
-	chartsutil "github.com/joshmeranda/chartsutil/pkg"
+	"github.com/joshmeranda/chartsutil/pkg/release"
 )
 
 func TestTagPattern(t *testing.T) {
@@ -37,10 +37,10 @@ func TestTagPattern(t *testing.T) {
 		},
 	}
 
-	tagRegexp := regexp.MustCompile(chartsutil.DefaultTagPattern)
+	pattern := regexp.MustCompile(release.DefaultReleaseNamePattern)
 
 	for _, c := range cases {
-		actual := tagRegexp.MatchString(c.Tag)
+		actual := pattern.MatchString(c.Tag)
 		if actual != c.Expectmatch {
 			t.Errorf("expected %t but got %t for tag %s", c.Expectmatch, actual, c.Tag)
 		}

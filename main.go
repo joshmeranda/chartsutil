@@ -6,11 +6,12 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/google/go-github/github"
 	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/display"
+	"github.com/joshmeranda/chartsutil/pkg/release"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 	"github.com/urfave/cli/v2"
@@ -34,8 +35,8 @@ func rebaseCheck(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
 	rootFs := filesystem.GetFilesystem(chartsDir)
-	tagPattern := ctx.String("tag-pattern")
-	tagRegex, err := regexp.Compile(tagPattern)
+	releaseNamePattern := ctx.String("release-pattern")
+	releaseRegex, err := regexp.Compile(releaseNamePattern)
 	if err != nil {
 		return fmt.Errorf("failed to compile tag pattern: %w", err)
 	}
@@ -61,49 +62,51 @@ func rebaseCheck(ctx *cli.Context) error {
 		return fmt.Errorf("upstream URL '%s' is not a git repository", pullOpts.URL)
 	}
 
-	if pullOpts.Commit == nil {
-		return fmt.Errorf("upstream commit is not set")
-	}
-
-	logger.Info("cloning upstream", "url", pullOpts.URL)
-	cloneOpts := &git.CloneOptions{
-		URL: pullOpts.URL,
-		// todo: add support for a single branch pull (more speed == more better)
-		// ReferenceName: "refs/heads/main",
-		// SingleBranch:  true,
-		SingleBranch: false,
-		Progress:     os.Stdin,
-		Tags:         git.AllTags,
-	}
-	repo, err := git.PlainClone(gitRoot, false, cloneOpts)
+	ref, err := chartsutil.RepoRefFromUrl(pullOpts.URL)
 	if err != nil {
-		return fmt.Errorf("failed to clone upstream repository: %w", err)
-
+		return fmt.Errorf("failed to get upstream owner and name from url: %w", err)
 	}
 
-	logger.Info("checking upstream for newer tags for package", "pkg", pkgName)
-	currentCommitHash := plumbing.NewHash(*pullOpts.Commit)
-	currentCommit, err := repo.CommitObject(currentCommitHash)
+	var currentReleaseDate time.Time
+	client := github.NewClient(nil)
+
+	tag, _, err := client.Git.GetTag(ctx.Context, ref.Owner, ref.Name, *pullOpts.Commit)
+	switch err {
+	case nil:
+		release, _, err := client.Repositories.GetReleaseByTag(ctx.Context, ref.Owner, ref.Name, *tag.Tag)
+		if err != nil {
+			return fmt.Errorf("failed to fetch release for tag: %w", err)
+		}
+
+		currentReleaseDate = release.CreatedAt.Time
+	default:
+		logger.Warn("failed to fetch tag for current commit, using commti date", "err", err, "commit", *pullOpts.Commit)
+
+		commit, _, err := client.Git.GetCommit(ctx.Context, ref.Owner, ref.Name, *pullOpts.Commit)
+		if err != nil {
+			return fmt.Errorf("failed to fetch commit for hash: %w", err)
+		}
+
+		currentReleaseDate = *commit.Committer.Date
+	}
+
+	query := release.ReleaseQuery{
+		Since:       currentReleaseDate,
+		NamePattern: releaseRegex,
+	}
+
+	releases, err := release.ReleasesForUpstream(ctx.Context, ref, query)
 	if err != nil {
-		return fmt.Errorf("failed to get current commit: %w", err)
+		return fmt.Errorf("failed to list upstream releases: %w", err)
 	}
 
-	tagQuery := chartsutil.TagQuery{
-		Since:     currentCommit.Committer.When.Local(),
-		TagFilter: *tagRegex,
+	table := display.NewTable("Name", "Age", "Hash")
+	for _, release := range releases {
+		age := display.NewDuration(release.Age).Round()
+		table.AddRow(release.Name, age.String(), release.Hash)
 	}
 
-	tags, err := chartsutil.TagsFromRepo(repo, tagQuery)
-	if err != nil {
-		return fmt.Errorf("failed to fetch tags with query: %w", err)
-	}
-
-	table := display.NewTable("Tag", "Age", "Hash")
-	for _, tag := range tags {
-		table.AddRow(tag.Name, display.NewDuration(tag.Age).Round().String(), tag.Hash)
-	}
-
-	fmt.Println(table)
+	fmt.Print(table.String())
 
 	return nil
 }
@@ -136,9 +139,9 @@ func main() {
 						Action:      rebaseCheck,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
-								Name:    "tag-pattern",
+								Name:    "release-pattern",
 								Aliases: []string{"p"},
-								Value:   chartsutil.DefaultTagPattern,
+								Value:   release.DefaultReleaseNamePattern,
 							},
 						},
 					},
