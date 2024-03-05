@@ -100,7 +100,7 @@ func rebaseCheck(ctx *cli.Context) error {
 
 	table := display.NewTable("Tag", "Age", "Hash")
 	for _, tag := range tags {
-		table.AddRow(tag.Name, tag.Age.String(), tag.Hash)
+		table.AddRow(tag.Name, display.NewDuration(tag.Age).Round().String(), tag.Hash)
 	}
 
 	fmt.Println(table)

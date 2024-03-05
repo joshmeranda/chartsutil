@@ -41,31 +41,6 @@ func NewDuration(d time.Duration) Duration {
 
 // Round returns a new duration rounded the duration to the highest non-zero field.
 func (d Duration) Round() Duration {
-	// if d.Minutes > 30 && d.Hours > 0 {
-	// 	d.Hours++
-	// 	d.Minutes = 0
-	// }
-
-	// if d.Hours > 12 && d.Days > 0 {
-	// 	d.Days++
-	// 	d.Hours = 0
-	// }
-
-	// if d.Days > 3 && d.Weeks > 0 {
-	// 	d.Weeks++
-	// 	d.Days = 0
-	// }
-
-	// if d.Weeks > 2 && d.Months > 0 {
-	// 	d.Months++
-	// 	d.Weeks = 0
-	// }
-
-	// if d.Months > 6 && d.Years > 0 {
-	// 	d.Years++
-	// 	d.Months = 0
-	// }
-
 	if d.Years > 0 {
 		if d.Months >= 5 {
 			return Duration{
