@@ -148,7 +148,6 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		// if err := app.Run([]string{"chart-utils", "--charts-dir", "/home/wrinkle/workspaces/rancher/charts", "--package", "rancher-logging", "rebase", "check"}); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
