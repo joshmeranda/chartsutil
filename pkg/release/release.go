@@ -10,7 +10,10 @@ import (
 	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 )
 
-const DefaultReleaseNamePattern = "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-rc[-.]?[0-9]+)?$"
+const (
+	DefaultReleaseNamePattern = "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-rc[-.]?[0-9]+)?$"
+	MaxAvailableReleases      = 1000
+)
 
 type ReleaseQuery struct {
 	Since       time.Time
@@ -25,24 +28,37 @@ type Release struct {
 
 func ReleasesForUpstream(ctx context.Context, ref chartsutil.RepoRef, query ReleaseQuery) ([]Release, error) {
 	client := github.NewClient(nil)
-	releases, _, err := client.Repositories.ListReleases(ctx, ref.Owner, ref.Name, &github.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("error fetching releases for chart upstream: %w", err)
-	}
-
-	now := time.Now().UTC()
 
 	matchingReleases := make([]Release, 0)
-	for _, release := range releases {
-		if release.CreatedAt.Time.After(query.Since) && query.NamePattern.MatchString(*release.Name) {
-			entry := Release{
-				Name: *release.Name,
-				Age:  now.Sub(release.CreatedAt.Time),
-				Hash: *release.TargetCommitish,
-			}
+	now := time.Now().UTC()
 
-			matchingReleases = append(matchingReleases, entry)
+	listOpts := &github.ListOptions{
+		PerPage: 100,
+	}
+
+	for i := 1; i*listOpts.PerPage <= MaxAvailableReleases+1; i++ {
+		releases, response, err := client.Repositories.ListReleases(ctx, ref.Owner, ref.Name, listOpts)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching releases for chart upstream: %w", err)
 		}
+
+		for _, release := range releases {
+			if release.CreatedAt.Time.After(query.Since) && query.NamePattern.MatchString(*release.Name) {
+				entry := Release{
+					Name: *release.Name,
+					Age:  now.Sub(release.CreatedAt.Time),
+					Hash: *release.TargetCommitish,
+				}
+
+				matchingReleases = append(matchingReleases, entry)
+			}
+		}
+
+		if response.NextPage == 0 {
+			break
+		}
+
+		listOpts.Page = response.NextPage
 	}
 
 	return matchingReleases, nil
