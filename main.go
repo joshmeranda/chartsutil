@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-github/github"
 	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/display"
+	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/joshmeranda/chartsutil/pkg/release"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
@@ -25,7 +26,38 @@ var (
 	logger *slog.Logger
 )
 
-func rebase(ctx *cli.Context) error {
+func pkgRebase(ctx *cli.Context) error {
+	pkgName := ctx.String("package")
+	chartsDir := ctx.String("charts-dir")
+	rootFs := filesystem.GetFilesystem(chartsDir)
+
+	gitRoot, err := os.MkdirTemp(os.TempDir(), "chart-utils-")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+	defer os.RemoveAll(gitRoot)
+
+	pkg, err := charts.GetPackage(rootFs, pkgName)
+	if err != nil {
+		return err
+	}
+
+	opts := rebase.Options{
+		Logger: logger,
+	}
+
+	rb, err := rebase.NewRebase(pkg, "3173f0f0b3c040ac75617c5e8497dc479afc11f0", opts)
+	if err != nil {
+		return fmt.Errorf("invalid rebaser spec: %w", err)
+	}
+	defer rb.Close()
+
+	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rb.ToCommit)
+
+	if err := rb.Rebase(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -68,8 +100,8 @@ func rebaseCheck(ctx *cli.Context) error {
 	}
 
 	var currentReleaseDate time.Time
-	client := github.NewClient(nil)
 
+	client := github.NewClient(nil)
 	tag, _, err := client.Git.GetTag(ctx.Context, ref.Owner, ref.Name, *pullOpts.Commit)
 	switch err {
 	case nil:
@@ -130,7 +162,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:        "rebase",
-				Action:      rebase,
+				Action:      pkgRebase,
 				Description: "Rebase a chart to a new version of the base chart",
 				Subcommands: []*cli.Command{
 					{
