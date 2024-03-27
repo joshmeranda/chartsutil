@@ -31,9 +31,10 @@ const (
 )
 
 type Options struct {
-	Logger     *slog.Logger
-	StagingDir string
-	ChartsDir  string
+	Logger      *slog.Logger
+	StagingDir  string
+	ChartsDir   string
+	Incremental bool
 }
 
 type Rebase struct {
@@ -100,6 +101,40 @@ func (r *Rebase) commitCharts(msg string) error {
 	return nil
 }
 
+func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commit) ([]*object.Commit, error) {
+	subDir := r.Package.Chart.Upstream.GetOptions().Subdirectory
+
+	r.Logger.Info("checking upstream for commits in range", "from", from.Hash.String(), "to", to.Hash.String())
+
+	// increment since to avoid including the current commit
+	since := from.Committer.When.Add(1)
+	logOpts := git.LogOptions{
+		From:  to.Hash,
+		Order: git.LogOrderDefault,
+		PathFilter: func(p string) bool {
+			if subDir == nil {
+				return true
+			}
+
+			return strings.HasPrefix(p, *subDir)
+		},
+		Since: &since,
+	}
+
+	commitIter, err := r.upstreamRepo.Log(&logOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chart commits: %w", err)
+	}
+
+	commits := make([]*object.Commit, 0)
+	err = commitIter.ForEach(func(c *object.Commit) error {
+		commits = append(commits, c)
+		return nil
+	})
+
+	return commits, nil
+}
+
 func (r *Rebase) handleCommit(commit *object.Commit) error {
 	if err := CheckoutHash(r.upstreamRepo, commit.Hash); err != nil {
 		return fmt.Errorf("failed to checkout commit '%s': %w", commit.Hash.String(), err)
@@ -131,6 +166,7 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 	// need to run as subprocess since go-git Pull only supports fast-forward merges
 	cmd := exec.Command("git", "merge", "--no-ff", "--no-commit", CHARTS_STAGING_BRANCH_NAME)
 	cmd.Dir = r.ChartsDir
+
 	r.Logger.Info("merging branch", "cmd", cmd.String(), "dir", cmd.Dir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// return fmt.Errorf("failed to merge branch %s: %s", CHARTS_STAGING_BRANCH_NAME, output)
@@ -157,13 +193,6 @@ func (r *Rebase) Rebase() error {
 
 	opts := git.CloneOptions{
 		URL: r.Package.Chart.Upstream.GetOptions().URL,
-
-		// Auth:              nil,
-
-		// SingleBranch:      false,
-		// ReferenceName: "",
-
-		// Depth: 1,
 	}
 
 	r.upstreamRepo, err = git.PlainOpen(r.StagingDir)
@@ -180,41 +209,17 @@ func (r *Rebase) Rebase() error {
 		r.Logger.Info("using erxisting staging repository", "dir", r.StagingDir)
 	}
 
-	// fromHash := plumbing.NewHash(*r.Package.Chart.Upstream.GetOptions().Commit)
-	// fromCommit, err := stagingRepo.CommitObject(fromHash)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get commit object for '%s': %w", *r.Package.Chart.Upstream.GetOptions().Commit, err)
-	// }
+	fromHash := plumbing.NewHash(*r.Package.Chart.Upstream.GetOptions().Commit)
+	fromCommit, err := r.upstreamRepo.CommitObject(fromHash)
+	if err != nil {
+		return fmt.Errorf("failed to get commit object for '%s': %w", *r.Package.Chart.Upstream.GetOptions().Commit, err)
+	}
 
 	toHash := plumbing.NewHash(r.ToCommit)
 	toCommit, err := r.upstreamRepo.CommitObject(toHash)
 	if err != nil {
 		return fmt.Errorf("failed to get commit object for '%s': %w", r.ToCommit, err)
 	}
-
-	// subDir := r.Package.Chart.Upstream.GetOptions().Subdirectory
-	//
-	// r.Logger.Info("checking upstream for commits in range", "from", fromHash.String(), "to", toHash.String())
-	//
-	// increment since to avoid including the current commit
-	// since := fromCommit.Committer.When.Add(1)
-	// logOpts := git.LogOptions{
-	// 	From:  toHash,
-	// 	Order: git.LogOrderDefault,
-	// 	PathFilter: func(p string) bool {
-	// 		if subDir == nil {
-	// 			return true
-	// 		}
-	//
-	// 		return strings.HasPrefix(p, *subDir)
-	// 	},
-	// 	Since: &since,
-	// }
-	//
-	// commits, err := stagingRepo.Log(&logOpts)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get chart commits: %w", err)
-	// }
 
 	upstreamWt, err := r.upstreamRepo.Worktree()
 	if err != nil {
@@ -227,24 +232,36 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("failed to checkout staging repository: %w", err)
 	}
 
+	var commits []*object.Commit
+	if r.Incremental {
+		commits, err = r.getUpstreamCommitsBetween(fromCommit, toCommit)
+		if err != nil {
+			return fmt.Errorf("failed to get upstream commits: %w", err)
+		}
+	} else {
+		commits = []*object.Commit{toCommit}
+	}
+
 	if err := CreateBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME); err != nil {
 		return fmt.Errorf("failed to create quarantine branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME)
 
 	err = DoOnBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
-		r.Logger.Info("preparing package")
-		err = r.Package.Prepare()
-		if err != nil {
-			return fmt.Errorf("failed to prepare the chart")
-		}
+		for _, commit := range commits {
+			r.Logger.Info("preparing package")
+			err = r.Package.Prepare()
+			if err != nil {
+				return fmt.Errorf("failed to prepare the chart")
+			}
 
-		if err := r.commitCharts("copying current 	charts"); err != nil {
-			return fmt.Errorf("failed to commit prepared package: %w", err)
-		}
+			if err := r.commitCharts("copying current 	charts"); err != nil {
+				return fmt.Errorf("failed to commit prepared package: %w", err)
+			}
 
-		if err := r.handleCommit(toCommit); err != nil {
-			return fmt.Errorf("error bringing chart to commit: %w", err)
+			if err := r.handleCommit(commit); err != nil {
+				return fmt.Errorf("error bringing chart to commit: %w", err)
+			}
 		}
 
 		return nil

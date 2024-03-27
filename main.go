@@ -31,6 +31,7 @@ func pkgRebase(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
 	rootFs := filesystem.GetFilesystem(chartsDir)
+	incremental := !ctx.Bool("non-incremental")
 
 	gitRoot, err := os.MkdirTemp(os.TempDir(), "chart-utils-")
 	if err != nil {
@@ -44,9 +45,10 @@ func pkgRebase(ctx *cli.Context) error {
 	}
 
 	opts := rebase.Options{
-		Logger:     logger,
-		StagingDir: "rebase-root",
-		ChartsDir:  chartsDir,
+		Logger:      logger,
+		StagingDir:  "rebase-root",
+		ChartsDir:   chartsDir,
+		Incremental: incremental,
 	}
 
 	rb, err := rebase.NewRebase(pkg, "7c6906ca223344c06952007fda670c6c81e6d1da", opts)
@@ -189,6 +191,12 @@ func main() {
 				Name:        "rebase",
 				Action:      pkgRebase,
 				Description: "Rebase a chart to a new version of the base chart",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "non-incremental",
+						Usage: "jump to the last commit instead of incrementally checking each commit",
+					},
+				},
 				Subcommands: []*cli.Command{
 					{
 						Name:        "check",
