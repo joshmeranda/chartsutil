@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/google/go-github/github"
 	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/display"
@@ -43,10 +44,12 @@ func pkgRebase(ctx *cli.Context) error {
 	}
 
 	opts := rebase.Options{
-		Logger: logger,
+		Logger:     logger,
+		StagingDir: "rebase-root",
+		ChartsDir:  chartsDir,
 	}
 
-	rb, err := rebase.NewRebase(pkg, "3173f0f0b3c040ac75617c5e8497dc479afc11f0", opts)
+	rb, err := rebase.NewRebase(pkg, "7c6906ca223344c06952007fda670c6c81e6d1da", opts)
 	if err != nil {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
@@ -62,6 +65,7 @@ func pkgRebase(ctx *cli.Context) error {
 }
 
 // todo: add verbosity flags: verbose and quiet (only necessary output)
+// todo: move rebase-check to upstream check
 
 func rebaseCheck(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
@@ -143,6 +147,23 @@ func rebaseCheck(ctx *cli.Context) error {
 	return nil
 }
 
+func sandbox(ctx *cli.Context) error {
+	r, err := git.PlainOpen(".")
+	if err != nil {
+		return err
+	}
+
+	if err := rebase.CreateBranch(r, "new-branch"); err != nil {
+		return err
+	}
+
+	if err := rebase.DeleteBranch(r, "new-branch"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func main() {
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -160,6 +181,10 @@ func main() {
 			},
 		},
 		Commands: []*cli.Command{
+			{
+				Name:   "sandbox",
+				Action: sandbox,
+			},
 			{
 				Name:        "rebase",
 				Action:      pkgRebase,
@@ -182,7 +207,9 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	// if err := app.Run(os.Args); err != nil {
+	if err := app.Run([]string{"chartsutil", "--charts-dir", "/home/wrinkle/workspaces/rancher/charts", "--package", "rancher-monitoring/rancher-node-exporter", "rebase"}); err != nil {
+		// if err := app.Run([]string{"chartsutil", "--package", "a", "sandbox"}); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
