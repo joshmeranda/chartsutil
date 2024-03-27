@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/google/go-github/github"
 	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/display"
@@ -67,7 +66,6 @@ func pkgRebase(ctx *cli.Context) error {
 }
 
 // todo: add verbosity flags: verbose and quiet (only necessary output)
-// todo: move rebase-check to upstream check
 
 func rebaseCheck(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
@@ -149,23 +147,6 @@ func rebaseCheck(ctx *cli.Context) error {
 	return nil
 }
 
-func sandbox(ctx *cli.Context) error {
-	r, err := git.PlainOpen(".")
-	if err != nil {
-		return err
-	}
-
-	if err := rebase.CreateBranch(r, "new-branch"); err != nil {
-		return err
-	}
-
-	if err := rebase.DeleteBranch(r, "new-branch"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func main() {
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -184,8 +165,22 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:   "sandbox",
-				Action: sandbox,
+				Name: "upstream",
+				Subcommands: []*cli.Command{
+					{
+						Name:        "check",
+						Description: "check the chart upstream for newer versions of the base chart",
+						Action:      rebaseCheck,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "release-pattern",
+								Usage:   "regex pattern to match release names",
+								Aliases: []string{"p"},
+								Value:   release.DefaultReleaseNamePattern,
+							},
+						},
+					},
+				},
 			},
 			{
 				Name:        "rebase",
@@ -195,20 +190,6 @@ func main() {
 					&cli.BoolFlag{
 						Name:  "non-incremental",
 						Usage: "jump to the last commit instead of incrementally checking each commit",
-					},
-				},
-				Subcommands: []*cli.Command{
-					{
-						Name:        "check",
-						Description: "check the chart upstream for newer versions of the base chart",
-						Action:      rebaseCheck,
-						Flags: []cli.Flag{
-							&cli.StringFlag{
-								Name:    "release-pattern",
-								Aliases: []string{"p"},
-								Value:   release.DefaultReleaseNamePattern,
-							},
-						},
 					},
 				},
 			},
