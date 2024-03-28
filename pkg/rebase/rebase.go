@@ -106,7 +106,7 @@ func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commi
 
 	r.Logger.Info("checking upstream for commits in range", "from", from.Hash.String(), "to", to.Hash.String())
 
-	// increment since to avoid including the current commit
+	// increment "since" to avoid including the current commit
 	since := from.Committer.When.Add(1)
 	logOpts := git.LogOptions{
 		From:  to.Hash,
@@ -127,7 +127,7 @@ func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commi
 	}
 
 	commits := make([]*object.Commit, 0)
-	err = commitIter.ForEach(func(c *object.Commit) error {
+	_ = commitIter.ForEach(func(c *object.Commit) error {
 		commits = append(commits, c)
 		return nil
 	})
@@ -173,10 +173,9 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 		fmt.Println(string(output))
 	}
 
-	// todo: get user input
-	var input string
-	fmt.Println("Press [enter] to continue...")
-	fmt.Scanln(&input)
+	if err := r.shell(); err != nil {
+		return fmt.Errorf("encountered error running shell: %w", err)
+	}
 
 	return nil
 }
@@ -238,6 +237,7 @@ func (r *Rebase) Rebase() error {
 		if err != nil {
 			return fmt.Errorf("failed to get upstream commits: %w", err)
 		}
+		r.Logger.Info("found %d commits")
 	} else {
 		commits = []*object.Commit{toCommit}
 	}
@@ -248,13 +248,14 @@ func (r *Rebase) Rebase() error {
 	defer DeleteBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME)
 
 	err = DoOnBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
-		for _, commit := range commits {
-			r.Logger.Info("preparing package")
-			err = r.Package.Prepare()
-			if err != nil {
-				return fmt.Errorf("failed to prepare the chart")
-			}
+		r.Logger.Info("preparing package")
+		err = r.Package.Prepare()
+		if err != nil {
+			return fmt.Errorf("failed to prepare the chart")
+		}
 
+		for _, commit := range commits {
+			r.Logger.Info("bringing chart to commit", "commit", commit.Hash.String())
 			if err := r.commitCharts("copying current 	charts"); err != nil {
 				return fmt.Errorf("failed to commit prepared package: %w", err)
 			}

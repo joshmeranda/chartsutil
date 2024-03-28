@@ -196,8 +196,8 @@ func main() {
 		},
 	}
 
-	// if err := app.Run(os.Args); err != nil {
-	if err := app.Run([]string{"chartsutil", "--charts-dir", "/home/wrinkle/workspaces/rancher/charts", "--package", "rancher-monitoring/rancher-node-exporter", "rebase"}); err != nil {
+	if err := app.Run(os.Args); err != nil {
+		// if err := app.Run([]string{"chartsutil", "--charts-dir", "/home/wrinkle/workspaces/rancher/charts", "--package", "rancher-monitoring/rancher-node-exporter", "rebase"}); err != nil {
 		// if err := app.Run([]string{"chartsutil", "--package", "a", "sandbox"}); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
