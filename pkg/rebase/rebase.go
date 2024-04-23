@@ -161,12 +161,9 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 	defer DeleteBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME)
 
 	err := DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_STAGING_BRANCH_NAME, func(wt *git.Worktree) error {
-		var src string
+		src := r.StagingDir
 
-		switch dir := r.Package.Upstream.GetOptions().Subdirectory; dir {
-		case nil:
-			src = r.StagingDir
-		default:
+		if dir := r.Package.Upstream.GetOptions().Subdirectory; dir != nil {
 			src = filepath.Join(r.StagingDir, *dir)
 		}
 
@@ -187,7 +184,7 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 	}
 
 	// need to run as subprocess since go-git Pull only supports fast-forward merges
-	cmd := exec.Command("git", "merge", "--no-ff", "--no-commit", CHARTS_STAGING_BRANCH_NAME)
+	cmd := exec.Command("git", "merge", "--squash", "--no-commit", CHARTS_STAGING_BRANCH_NAME)
 	cmd.Dir = r.ChartsDir
 
 	r.Logger.Info("merging branch", "cmd", cmd.String(), "dir", cmd.Dir)
