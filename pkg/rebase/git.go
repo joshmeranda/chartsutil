@@ -32,12 +32,6 @@ func CreateBranch(r *git.Repository, branch string) error {
 		return fmt.Errorf("failed to create branch: %w", err)
 	}
 
-	// cmd := exec.Command("git", "branch", branch)
-	// cmd.Dir = "/home/wrinkle/workspaces/joshmeranda/rancher-charts"
-	// if _, err := cmd.CombinedOutput(); err != nil {
-	// 	return fmt.Errorf("failed to create branch: %w", err)
-	// }
-
 	return nil
 }
 
@@ -45,12 +39,6 @@ func DeleteBranch(r *git.Repository, branch string) error {
 	if err := r.Storer.RemoveReference(GetLocalBranchRefName(branch)); err != nil {
 		return fmt.Errorf("failed to delete branch: %w", err)
 	}
-
-	// cmd := exec.Command("git", "branch", "-D", branch)
-	// cmd.Dir = "/home/wrinkle/workspaces/joshmeranda/rancher-charts"
-	// if _, err := cmd.CombinedOutput(); err != nil {
-	// 	return fmt.Errorf("failed to create branch: %w", err)
-	// }
 
 	return nil
 }
