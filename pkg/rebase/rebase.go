@@ -221,6 +221,24 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 }
 
 // Rebase brings the package to the specified commit, optinoally letting the user interact with the changes at each step.
+//
+// The basic algorithm is as follows:
+//  1. Clone the upstream repository to a temporary directory
+//  2. In the charts repo:
+//     a. Create a quarantine branch, where all changes will be made before merging back to the main branch
+//     b. Prepare the target package
+//     c. Commit the prepared charts (package/<package name>/charts)
+//  3. If running interactively, calculate the commits between the current commit and the target upstream commit, otherwise a list of just the upstream commit is used
+//  4. For each commit:
+//     a. In the upstream repo, checkout the commit
+//     b. In the charts repo create a staging branch to copy the upstream files into
+//     c. Copy the files from the upstream repo to the charts repo staging branch
+//     d. Commit the changes
+//     e. Merge the staging branch into the quarantine branch
+//     f. Resolve any conflict via interactive shell
+//  5. Pull changes to the generated-changes and package.yaml into the original branch
+//
+// todo: add support for non-git repositories (oci, archive, etc)
 func (r *Rebase) Rebase() error {
 	status, err := r.chartsWt.Status()
 	if err != nil {
