@@ -50,7 +50,7 @@ func pkgRebase(ctx *cli.Context) error {
 		Incremental: incremental,
 	}
 
-	rb, err := rebase.NewRebase(pkg, "7c6906ca223344c06952007fda670c6c81e6d1da", opts)
+	rb, err := rebase.NewRebase(pkg, "be3f43b07c7c3f034f6aada9af90a812a0b44aa8", opts)
 	if err != nil {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
@@ -196,9 +196,11 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
-		// if err := app.Run([]string{"chartsutil", "--charts-dir", "/home/wrinkle/workspaces/rancher/charts", "--package", "rancher-monitoring/rancher-node-exporter", "rebase"}); err != nil {
-		// if err := app.Run([]string{"chartsutil", "--package", "a", "sandbox"}); err != nil {
+	args := os.Args
+	// args := []string{"chartsutil", "--charts-dir", "/home/wrinkle/downloads/rancher-charts", "--package", "rancher-rebase-example", "rebase"}
+	// args := []string{"chartsutil", "--charts-dir", "/home/wrinkle/downloads/rancher-charts", "--package", "rancher-monitoring/rancher-node-exporter", "rebase"}
+
+	if err := app.Run(args); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}

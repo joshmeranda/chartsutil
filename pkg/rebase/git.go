@@ -2,7 +2,6 @@ package rebase
 
 import (
 	"fmt"
-	"os/exec"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -23,45 +22,40 @@ func GetRemoteBranchRefName(branch, remote string) plumbing.ReferenceName {
 type WorktreeFunc func(wt *git.Worktree) error
 
 func CreateBranch(r *git.Repository, branch string) error {
-	// head, err := r.Head()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get HEAD: %w", err)
-	// }
+	head, err := r.Head()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
 
-	// ref := plumbing.NewHashReference(GetLocalBranchRefName(branch), head.Hash())
-	// if err := r.Storer.SetReference(ref); err != nil {
-	// 	return fmt.Errorf("failed to create branch: %w", err)
-	// }
-
-	cmd := exec.Command("git", "branch", branch)
-	cmd.Dir = "/home/wrinkle/workspaces/joshmeranda/rancher-charts"
-	if _, err := cmd.CombinedOutput(); err != nil {
+	ref := plumbing.NewHashReference(GetLocalBranchRefName(branch), head.Hash())
+	if err := r.Storer.SetReference(ref); err != nil {
 		return fmt.Errorf("failed to create branch: %w", err)
 	}
+
+	// cmd := exec.Command("git", "branch", branch)
+	// cmd.Dir = "/home/wrinkle/workspaces/joshmeranda/rancher-charts"
+	// if _, err := cmd.CombinedOutput(); err != nil {
+	// 	return fmt.Errorf("failed to create branch: %w", err)
+	// }
 
 	return nil
 }
 
 func DeleteBranch(r *git.Repository, branch string) error {
-	// if err := r.Storer.RemoveReference(GetLocalBranchRefName(branch)); err != nil {
-	// 	return fmt.Errorf("failed to delete branch: %w", err)
-	// }
-
-	cmd := exec.Command("git", "branch", "-D", branch)
-	cmd.Dir = "/home/wrinkle/workspaces/joshmeranda/rancher-charts"
-	if _, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create branch: %w", err)
+	if err := r.Storer.RemoveReference(GetLocalBranchRefName(branch)); err != nil {
+		return fmt.Errorf("failed to delete branch: %w", err)
 	}
+
+	// cmd := exec.Command("git", "branch", "-D", branch)
+	// cmd.Dir = "/home/wrinkle/workspaces/joshmeranda/rancher-charts"
+	// if _, err := cmd.CombinedOutput(); err != nil {
+	// 	return fmt.Errorf("failed to create branch: %w", err)
+	// }
 
 	return nil
 }
 
-func DoOnWorktree(r *git.Repository, f WorktreeFunc) error {
-	wt, err := r.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-
+func DoOnWorktree(wt *git.Worktree, f WorktreeFunc) error {
 	if err := f(wt); err != nil {
 		return err
 	}
@@ -69,8 +63,8 @@ func DoOnWorktree(r *git.Repository, f WorktreeFunc) error {
 	return nil
 }
 
-func SwitchToBranch(r *git.Repository, branch string) error {
-	err := DoOnWorktree(r, func(wt *git.Worktree) error {
+func SwitchToBranch(wt *git.Worktree, branch string) error {
+	err := DoOnWorktree(wt, func(wt *git.Worktree) error {
 		opts := &git.CheckoutOptions{
 			Branch: GetLocalBranchRefName(branch),
 		}
@@ -88,8 +82,8 @@ func SwitchToBranch(r *git.Repository, branch string) error {
 	return nil
 }
 
-func CheckoutHash(r *git.Repository, hash plumbing.Hash) error {
-	err := DoOnWorktree(r, func(wt *git.Worktree) error {
+func CheckoutHash(wt *git.Worktree, hash plumbing.Hash) error {
+	err := DoOnWorktree(wt, func(wt *git.Worktree) error {
 		opts := &git.CheckoutOptions{
 			Hash: hash,
 		}
@@ -107,19 +101,18 @@ func CheckoutHash(r *git.Repository, hash plumbing.Hash) error {
 	return nil
 }
 
-func DoOnBranch(r *git.Repository, branch string, f WorktreeFunc) error {
+func DoOnBranch(r *git.Repository, wt *git.Worktree, branch string, f WorktreeFunc) error {
 	currentBranch, err := r.Head()
 	if err != nil {
 		return fmt.Errorf("failed to get current branch: %w", err)
 	}
 
-	err = SwitchToBranch(r, branch)
-	if err != nil {
+	if err := SwitchToBranch(wt, branch); err != nil {
 		return err
 	}
-	defer SwitchToBranch(r, currentBranch.Name().Short())
+	defer SwitchToBranch(wt, currentBranch.Name().Short())
 
-	err = DoOnWorktree(r, f)
+	err = DoOnWorktree(wt, f)
 	if err != nil {
 		return err
 	}

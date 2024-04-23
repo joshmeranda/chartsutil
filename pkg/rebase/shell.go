@@ -7,7 +7,7 @@ import (
 
 const (
 	// todo: maybe add commit to prompt
-	RC_CONTENTS = `PS1="(interactive-rebase-shell); alias abort='touch .abort_rebase'`
+	RC_CONTENTS = `PS1="(interactive-rebase-shell) "; alias abort='touch .abort_rebase'`
 )
 
 func (r *Rebase) shell() error {

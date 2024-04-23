@@ -26,8 +26,14 @@ var (
 )
 
 const (
-	CHARTS_STAGING_BRANCH_NAME   = "charts-staging"
+	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
+	CHARTS_STAGING_BRANCH_NAME = "charts-staging"
+
+	// CHARTS_QUARANTNE_BRANCH_NAME is the name of the "working" branch where the incoming changes are applied.
 	CHARTS_QUARANTNE_BRANCH_NAME = "quarantine"
+
+	// CHARTS_UPSTREAM_BRANCH_NAME is the name of the branch that tracks the upstream repository.
+	CHARTS_UPSTREAM_BRANCH_NAME = "upstream"
 )
 
 type Options struct {
@@ -44,7 +50,10 @@ type Rebase struct {
 	ToCommit string
 
 	upstreamRepo *git.Repository
-	chartsRepo   *git.Repository
+	upstreamWt   *git.Worktree
+
+	chartsRepo *git.Repository
+	chartsWt   *git.Worktree
 }
 
 func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
@@ -65,6 +74,11 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 		return nil, fmt.Errorf("failed to open charts repository: %w", err)
 	}
 
+	chartsWorktree, err := chartsRepo.Worktree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get charts worktree: %w", err)
+	}
+
 	return &Rebase{
 		Options: opts,
 
@@ -72,6 +86,7 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 		ToCommit: to,
 
 		chartsRepo: chartsRepo,
+		chartsWt:   chartsWorktree,
 	}, nil
 }
 
@@ -136,17 +151,25 @@ func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commi
 }
 
 func (r *Rebase) handleCommit(commit *object.Commit) error {
-	if err := CheckoutHash(r.upstreamRepo, commit.Hash); err != nil {
+	if err := CheckoutHash(r.upstreamWt, commit.Hash); err != nil {
 		return fmt.Errorf("failed to checkout commit '%s': %w", commit.Hash.String(), err)
 	}
 
-	if err := CreateBranch(r.upstreamRepo, CHARTS_STAGING_BRANCH_NAME); err != nil {
+	if err := CreateBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME)
 
-	err := DoOnBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME, func(wt *git.Worktree) error {
-		src := filepath.Join(r.StagingDir, *r.Package.Upstream.GetOptions().Subdirectory)
+	err := DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_STAGING_BRANCH_NAME, func(wt *git.Worktree) error {
+		var src string
+
+		switch dir := r.Package.Upstream.GetOptions().Subdirectory; dir {
+		case nil:
+			src = r.StagingDir
+		default:
+			src = filepath.Join(r.StagingDir, *dir)
+		}
+
 		dst := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "charts")
 
 		if err := copy.Copy(src, dst); err != nil {
@@ -173,15 +196,43 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 		fmt.Println(string(output))
 	}
 
-	if err := r.shell(); err != nil {
-		return fmt.Errorf("encountered error running shell: %w", err)
+	status, err := r.chartsWt.Status()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree status: %w", err)
+	}
+
+	done := status.IsClean()
+
+	for !done {
+		if err := r.shell(); err != nil {
+			return fmt.Errorf("encountered error running shell: %w", err)
+		}
+
+		status, err := r.chartsWt.Status()
+		if err != nil {
+			return fmt.Errorf("failed to get worktree status: %w", err)
+		}
+
+		if status.IsClean() {
+			break
+		}
+
+		r.Logger.Warn("worktree is not clean, re-running shell")
 	}
 
 	return nil
 }
 
+// Rebase brings the package to the specified commit, optinoally letting the user interact with the changes at each step.
 func (r *Rebase) Rebase() error {
-	var err error
+	status, err := r.chartsWt.Status()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree status: %w", err)
+	}
+
+	if !status.IsClean() {
+		return fmt.Errorf("charts repository is not clean: %s", status.String())
+	}
 
 	if r.StagingDir == "" {
 		r.StagingDir, err = os.MkdirTemp("", "chart-utils-rebase-*")
@@ -190,22 +241,27 @@ func (r *Rebase) Rebase() error {
 		}
 	}
 
-	opts := git.CloneOptions{
-		URL: r.Package.Chart.Upstream.GetOptions().URL,
-	}
-
 	r.upstreamRepo, err = git.PlainOpen(r.StagingDir)
 	if errors.Is(git.ErrRepositoryNotExists, err) {
-		r.Logger.Info("no repository exists at staging dir, attempting to clone...", "staging-dir", r.StagingDir, "url", opts.URL)
+		upstreamCloneOpts := git.CloneOptions{
+			URL: r.Package.Chart.Upstream.GetOptions().URL,
+		}
 
-		r.upstreamRepo, err = git.PlainClone(r.StagingDir, false, &opts)
+		r.Logger.Info("no repository exists at staging dir, attempting to clone...", "staging-dir", r.StagingDir, "url", upstreamCloneOpts.URL)
+
+		r.upstreamRepo, err = git.PlainClone(r.StagingDir, false, &upstreamCloneOpts)
 		if err != nil && !errors.Is(git.ErrRepositoryAlreadyExists, err) {
 			return fmt.Errorf("failed to clone upstream repository: %w", err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed to open staging repository: %w", err)
 	} else {
-		r.Logger.Info("using erxisting staging repository", "dir", r.StagingDir)
+		r.Logger.Info("using existing staging repository", "dir", r.StagingDir)
+	}
+
+	r.upstreamWt, err = r.upstreamRepo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get staging worktree: %w", err)
 	}
 
 	fromHash := plumbing.NewHash(*r.Package.Chart.Upstream.GetOptions().Commit)
@@ -237,7 +293,7 @@ func (r *Rebase) Rebase() error {
 		if err != nil {
 			return fmt.Errorf("failed to get upstream commits: %w", err)
 		}
-		r.Logger.Info("found %d commits")
+		r.Logger.Info(fmt.Sprintf("found %d commits", len(commits)))
 	} else {
 		commits = []*object.Commit{toCommit}
 	}
@@ -247,7 +303,7 @@ func (r *Rebase) Rebase() error {
 	}
 	defer DeleteBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME)
 
-	err = DoOnBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
+	err = DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
 		err = r.Package.Prepare()
 		if err != nil {
@@ -256,7 +312,7 @@ func (r *Rebase) Rebase() error {
 
 		for _, commit := range commits {
 			r.Logger.Info("bringing chart to commit", "commit", commit.Hash.String())
-			if err := r.commitCharts("copying current 	charts"); err != nil {
+			if err := r.commitCharts("copying current charts"); err != nil {
 				return fmt.Errorf("failed to commit prepared package: %w", err)
 			}
 
