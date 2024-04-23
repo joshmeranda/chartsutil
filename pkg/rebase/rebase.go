@@ -91,26 +91,32 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 }
 
 func (r *Rebase) commitCharts(msg string) error {
-	chartsRepo, err := git.PlainOpen(r.ChartsDir)
-	if err != nil {
-		return fmt.Errorf("failed to open charts repository: %w", err)
-	}
-
-	chartsWt, err := chartsRepo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get charts worktree: %w", err)
-	}
-
-	if _, err := chartsWt.Add(path.Join("packages", r.Package.Name)); err != nil {
+	if _, err := r.chartsWt.Add(path.Join("packages", r.Package.Name)); err != nil {
 		return fmt.Errorf("failed to stage chart changes: %w", err)
 	}
 
 	if msg == "" {
-		msg = r.Package.Name
+		msg = fmt.Sprintf("commitng changes to %s", r.Package.Name)
 	}
 
-	if _, err = chartsWt.Commit(fmt.Sprintf("rebase: %s", msg), &commitOpts); err != nil {
+	if _, err := r.chartsWt.Commit(fmt.Sprintf("rebase: %s", msg), &commitOpts); err != nil {
 		return fmt.Errorf("failed to commit chart changes: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Rebase) commitPatch(msg string) error {
+	if _, err := r.chartsWt.Add(path.Join("packages", r.Package.Name, "generate-changes")); err != nil {
+		return fmt.Errorf("failed to stage patch changes: %w", err)
+	}
+
+	if msg == "" {
+		msg = fmt.Sprintf("commitng patch changes to %s", r.Package.Name)
+	}
+
+	if _, err := r.chartsWt.Commit(msg, &commitOpts); err != nil {
+		return fmt.Errorf("failed to commit patch changes: %w", err)
 	}
 
 	return nil
@@ -236,7 +242,10 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 //     d. Commit the changes
 //     e. Merge the staging branch into the quarantine branch
 //     f. Resolve any conflict via interactive shell
-//  5. Pull changes to the generated-changes and package.yaml into the original branch
+//  5. On the quarantine branch
+//     a. Generate and commit the chart patch
+//     b. Update the package.yaml with the new uipstream info (commit, url, etc) and commit those changes
+//  5. Pull in the patch and package.yaml commits from the quarantine branch to the main branch
 //
 // todo: add support for non-git repositories (oci, archive, etc)
 func (r *Rebase) Rebase() error {
@@ -320,8 +329,8 @@ func (r *Rebase) Rebase() error {
 
 	err = DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
-		err = r.Package.Prepare()
-		if err != nil {
+
+		if err := r.Package.Prepare(); err != nil {
 			return fmt.Errorf("failed to prepare the chart")
 		}
 
@@ -334,6 +343,14 @@ func (r *Rebase) Rebase() error {
 			if err := r.handleCommit(commit); err != nil {
 				return fmt.Errorf("error bringing chart to commit: %w", err)
 			}
+		}
+
+		if err := r.Package.GeneratePatch(); err != nil {
+			return fmt.Errorf("failed to generate patch: %w", err)
+		}
+
+		if err := r.commitPatch(fmt.Sprintf("Updating %s to new base %s", r.Package.Name, toCommit.Hash)); err != nil {
+			return fmt.Errorf("failed to commit patch changes: %w", err)
 		}
 
 		return nil
