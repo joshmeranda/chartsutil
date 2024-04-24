@@ -30,6 +30,7 @@ var (
 
 // todo: might be a good idea to add some prefix to thesae branch names
 // todo: support backup functionality in case things go wrong
+// todo: hard reset on rebase error
 
 const (
 	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
@@ -229,30 +230,20 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 		fmt.Println(string(output))
 	}
 
-	// todo: handle abort file
-
-	status, err := r.chartsWt.Status()
+	isClean, err := IsWorktreeClean(r.chartsWt)
 	if err != nil {
-		return fmt.Errorf("failed to get worktree status: %w", err)
+		return fmt.Errorf("failed to check if worktree is clean: %w", err)
 	}
 
-	done := status.IsClean()
-
-	for !done {
-		if err := r.shell(); err != nil {
-			return fmt.Errorf("encountered error running shell: %w", err)
+	if !isClean {
+		r.Logger.Info("could not merge automatically, running interactive shell...")
+		if err := r.RunShell(); err != nil {
+			return fmt.Errorf("received error from shell: %w", err)
 		}
+	}
 
-		status, err := r.chartsWt.Status()
-		if err != nil {
-			return fmt.Errorf("failed to get worktree status: %w", err)
-		}
-
-		if status.IsClean() {
-			break
-		}
-
-		r.Logger.Warn("worktree is not clean, re-running shell")
+	if _, err := r.commitCharts(fmt.Sprintf("brining charts to %s", commit.Hash.String())); err != nil {
+		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
 	return nil
@@ -281,13 +272,13 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 //
 // todo: add support for non-git repositories (oci, archive, etc)
 func (r *Rebase) Rebase() error {
-	status, err := r.chartsWt.Status()
+	isClean, err := IsWorktreeClean(r.chartsWt)
 	if err != nil {
-		return fmt.Errorf("failed to get worktree status: %w", err)
+		return fmt.Errorf("failed to check if worktree is clean: %w", err)
 	}
 
-	if !status.IsClean() {
-		return fmt.Errorf("charts repository is not clean: %s", status.String())
+	if !isClean {
+		return fmt.Errorf("charts worktree is not clean")
 	}
 
 	if r.StagingDir == "" {
@@ -420,6 +411,7 @@ func (r *Rebase) Rebase() error {
 	}
 
 	// sleep via https://github.com/go-git/go-git/issues/37#issuecomment-1360057685
+	r.Logger.Info("letting git catch up...")
 	time.Sleep(time.Second * 2)
 
 	cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
