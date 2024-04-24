@@ -205,7 +205,7 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 
 		dst := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "charts")
 
-		if err := copy.Copy(src, dst); err != nil {
+		if err := copy.Copy(src, dst, copy.Options{Skip: shouldSkip}); err != nil {
 			return fmt.Errorf("failed to copy files from stage to worktree: %w", err)
 		}
 
