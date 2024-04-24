@@ -15,6 +15,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/otiai10/copy"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
+	"github.com/rancher/charts-build-scripts/pkg/options"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -24,6 +26,9 @@ var (
 		},
 	}
 )
+
+// todo: might be a good idea to add some prefix to thesae branch names
+// todo: support backup functionality in case things go wrong
 
 const (
 	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
@@ -107,7 +112,30 @@ func (r *Rebase) commitCharts(msg string) error {
 }
 
 func (r *Rebase) commitPatch(msg string) error {
-	if _, err := r.chartsWt.Add(path.Join("packages", r.Package.Name, "generate-changes")); err != nil {
+	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
+
+	if _, err := r.chartsWt.Add(patchDir); err != nil {
+		return fmt.Errorf("failed to stage patch changes: %w", err)
+	}
+
+	if msg == "" {
+		msg = fmt.Sprintf("commitng patch changes to %s", r.Package.Name)
+	}
+
+	if _, err := r.chartsWt.Commit(msg, &commitOpts); err != nil {
+		return fmt.Errorf("failed to commit patch changes: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Rebase) commitPackage(msg string) error {
+	packageFile := path.Join("packages", r.Package.Name, "package.yaml")
+
+	fmt.Printf("=== [Rebase.commitPatch] 000 %s ===\n", r.chartsWt.Filesystem.Root())
+	fmt.Printf("=== [Rebase.commitPatch] 001 %s ===\n", packageFile)
+
+	if _, err := r.chartsWt.Add(packageFile); err != nil {
 		return fmt.Errorf("failed to stage patch changes: %w", err)
 	}
 
@@ -198,6 +226,8 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 		// return fmt.Errorf("failed to merge branch %s: %s", CHARTS_STAGING_BRANCH_NAME, output)
 		fmt.Println(string(output))
 	}
+
+	// todo: handle abort file
 
 	status, err := r.chartsWt.Status()
 	if err != nil {
@@ -352,6 +382,29 @@ func (r *Rebase) Rebase() error {
 		if err := r.commitPatch(fmt.Sprintf("Updating %s to new base %s", r.Package.Name, toCommit.Hash)); err != nil {
 			return fmt.Errorf("failed to commit patch changes: %w", err)
 		}
+
+		pkgFile := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "package.yaml")
+		data, err := os.ReadFile(pkgFile)
+		if err != nil {
+			return fmt.Errorf("failed to read package options: %w", err)
+		}
+
+		pkgOpts := options.PackageOptions{}
+		if err := yaml.Unmarshal(data, &pkgOpts); err != nil {
+			return fmt.Errorf("failed to unmarshal package options: %w", err)
+		}
+
+		pkgOpts.MainChartOptions.UpstreamOptions.Commit = ToPtr(toHash.String())
+
+		if data, err = yaml.Marshal(pkgOpts); err != nil {
+			return fmt.Errorf("failed marshalling updated package options: %w", err)
+		}
+
+		if err := os.WriteFile(pkgFile, data, 0644); err != nil {
+			return fmt.Errorf("failed to write new package options: %w", err)
+		}
+
+		r.commitPackage("Update package.yaml")
 
 		return nil
 	})
