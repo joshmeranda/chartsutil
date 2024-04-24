@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -95,59 +96,60 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 	}, nil
 }
 
-func (r *Rebase) commitCharts(msg string) error {
+func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
+	// todo: don't add .git in charts (maybe do this when copying)
 	if _, err := r.chartsWt.Add(path.Join("packages", r.Package.Name)); err != nil {
-		return fmt.Errorf("failed to stage chart changes: %w", err)
+		return plumbing.Hash{}, fmt.Errorf("failed to stage chart changes: %w", err)
 	}
 
 	if msg == "" {
 		msg = fmt.Sprintf("commitng changes to %s", r.Package.Name)
 	}
 
-	if _, err := r.chartsWt.Commit(fmt.Sprintf("rebase: %s", msg), &commitOpts); err != nil {
-		return fmt.Errorf("failed to commit chart changes: %w", err)
+	hash, err := r.chartsWt.Commit(fmt.Sprintf("rebase: %s", msg), &commitOpts)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to commit chart changes: %w", err)
 	}
 
-	return nil
+	return hash, nil
 }
 
-func (r *Rebase) commitPatch(msg string) error {
+func (r *Rebase) commitPatch(msg string) (plumbing.Hash, error) {
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
 	if _, err := r.chartsWt.Add(patchDir); err != nil {
-		return fmt.Errorf("failed to stage patch changes: %w", err)
+		return plumbing.Hash{}, fmt.Errorf("failed to stage patch changes: %w", err)
 	}
 
 	if msg == "" {
 		msg = fmt.Sprintf("commitng patch changes to %s", r.Package.Name)
 	}
 
-	if _, err := r.chartsWt.Commit(msg, &commitOpts); err != nil {
-		return fmt.Errorf("failed to commit patch changes: %w", err)
+	hash, err := r.chartsWt.Commit(msg, &commitOpts)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to commit patch changes: %w", err)
 	}
 
-	return nil
+	return hash, nil
 }
 
-func (r *Rebase) commitPackage(msg string) error {
+func (r *Rebase) commitPackage(msg string) (plumbing.Hash, error) {
 	packageFile := path.Join("packages", r.Package.Name, "package.yaml")
 
-	fmt.Printf("=== [Rebase.commitPatch] 000 %s ===\n", r.chartsWt.Filesystem.Root())
-	fmt.Printf("=== [Rebase.commitPatch] 001 %s ===\n", packageFile)
-
 	if _, err := r.chartsWt.Add(packageFile); err != nil {
-		return fmt.Errorf("failed to stage patch changes: %w", err)
+		return plumbing.Hash{}, fmt.Errorf("failed to stage patch changes: %w", err)
 	}
 
 	if msg == "" {
 		msg = fmt.Sprintf("commitng patch changes to %s", r.Package.Name)
 	}
 
-	if _, err := r.chartsWt.Commit(msg, &commitOpts); err != nil {
-		return fmt.Errorf("failed to commit patch changes: %w", err)
+	hash, err := r.chartsWt.Commit(msg, &commitOpts)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to commit patch changes: %w", err)
 	}
 
-	return nil
+	return hash, nil
 }
 
 func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commit) ([]*object.Commit, error) {
@@ -207,7 +209,7 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 			return fmt.Errorf("failed to copy files from stage to worktree: %w", err)
 		}
 
-		if err := r.commitCharts("saving copied upstream charts"); err != nil {
+		if _, err := r.commitCharts("saving copied upstream charts"); err != nil {
 			return fmt.Errorf("failed to commit original chart: %w", err)
 		}
 
@@ -357,6 +359,9 @@ func (r *Rebase) Rebase() error {
 	}
 	defer DeleteBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME)
 
+	var patchHash plumbing.Hash
+	var packageHash plumbing.Hash
+
 	err = DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
 
@@ -366,7 +371,7 @@ func (r *Rebase) Rebase() error {
 
 		for _, commit := range commits {
 			r.Logger.Info("bringing chart to commit", "commit", commit.Hash.String())
-			if err := r.commitCharts("copying current charts"); err != nil {
+			if _, err := r.commitCharts("copying current charts"); err != nil {
 				return fmt.Errorf("failed to commit prepared package: %w", err)
 			}
 
@@ -379,7 +384,7 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to generate patch: %w", err)
 		}
 
-		if err := r.commitPatch(fmt.Sprintf("Updating %s to new base %s", r.Package.Name, toCommit.Hash)); err != nil {
+		if patchHash, err = r.commitPatch(fmt.Sprintf("Updating %s to new base %s", r.Package.Name, toCommit.Hash)); err != nil {
 			return fmt.Errorf("failed to commit patch changes: %w", err)
 		}
 
@@ -404,12 +409,24 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to write new package options: %w", err)
 		}
 
-		r.commitPackage("Update package.yaml")
+		if packageHash, err = r.commitPackage("Update package.yaml"); err != nil {
+			return fmt.Errorf("failed to commit package.yaml changes: %w", err)
+		}
 
 		return nil
 	})
 	if err != nil {
 		return err
+	}
+
+	// sleep via https://github.com/go-git/go-git/issues/37#issuecomment-1360057685
+	time.Sleep(time.Second * 2)
+
+	cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
+	cmd.Dir = r.ChartsDir
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to cherry-pick changes: %w", err)
 	}
 
 	return nil
