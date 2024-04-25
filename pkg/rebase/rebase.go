@@ -20,14 +20,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	commitOpts = git.CommitOptions{
-		Author: &object.Signature{
-			Name: "REBASE_BOT",
-		},
-	}
-)
-
 // todo: might be a good idea to add some prefix to thesae branch names
 // todo: support backup functionality in case things go wrong
 // todo: hard reset on rebase error
@@ -98,59 +90,7 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 }
 
 func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
-	// todo: don't add .git in charts (maybe do this when copying)
-	if _, err := r.chartsWt.Add(path.Join("packages", r.Package.Name)); err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to stage chart changes: %w", err)
-	}
-
-	if msg == "" {
-		msg = fmt.Sprintf("commitng changes to %s", r.Package.Name)
-	}
-
-	hash, err := r.chartsWt.Commit(fmt.Sprintf("rebase: %s", msg), &commitOpts)
-	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to commit chart changes: %w", err)
-	}
-
-	return hash, nil
-}
-
-func (r *Rebase) commitPatch(msg string) (plumbing.Hash, error) {
-	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
-
-	if _, err := r.chartsWt.Add(patchDir); err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to stage patch changes: %w", err)
-	}
-
-	if msg == "" {
-		msg = fmt.Sprintf("commitng patch changes to %s", r.Package.Name)
-	}
-
-	hash, err := r.chartsWt.Commit(msg, &commitOpts)
-	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to commit patch changes: %w", err)
-	}
-
-	return hash, nil
-}
-
-func (r *Rebase) commitPackage(msg string) (plumbing.Hash, error) {
-	packageFile := path.Join("packages", r.Package.Name, "package.yaml")
-
-	if _, err := r.chartsWt.Add(packageFile); err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to stage patch changes: %w", err)
-	}
-
-	if msg == "" {
-		msg = fmt.Sprintf("commitng patch changes to %s", r.Package.Name)
-	}
-
-	hash, err := r.chartsWt.Commit(msg, &commitOpts)
-	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to commit patch changes: %w", err)
-	}
-
-	return hash, nil
+	return Commit(r.chartsWt, msg, path.Join("packages", r.Package.Name))
 }
 
 func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commit) ([]*object.Commit, error) {
@@ -249,6 +189,51 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 	return nil
 }
 
+func (r *Rebase) updatePatches() (plumbing.Hash, error) {
+	if err := r.Package.GeneratePatch(); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("failed to generate patch: %w", err)
+	}
+
+	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
+
+	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, r.ToCommit), patchDir)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("failed to commit patch changes: %w", err)
+	}
+
+	return hash, nil
+}
+
+func (r *Rebase) updatePackageYaml() (plumbing.Hash, error) {
+	pkgFile := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "package.yaml")
+	data, err := os.ReadFile(pkgFile)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to read package options: %w", err)
+	}
+
+	pkgOpts := options.PackageOptions{}
+	if err := yaml.Unmarshal(data, &pkgOpts); err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to unmarshal package options: %w", err)
+	}
+
+	pkgOpts.MainChartOptions.UpstreamOptions.Commit = &r.ToCommit
+
+	if data, err = yaml.Marshal(pkgOpts); err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed marshalling updated package options: %w", err)
+	}
+
+	if err := os.WriteFile(pkgFile, data, 0644); err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to write new package options: %w", err)
+	}
+
+	hash, err := Commit(r.chartsWt, "updating package.yaml for", pkgFile)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to commit package.yaml changes: %w", err)
+	}
+
+	return hash, nil
+}
+
 // Rebase brings the package to the specified commit, optinoally letting the user interact with the changes at each step.
 //
 // The basic algorithm is as follows:
@@ -323,12 +308,7 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("failed to get commit object for '%s': %w", r.ToCommit, err)
 	}
 
-	upstreamWt, err := r.upstreamRepo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get staging worktree: %w", err)
-	}
-
-	if err := upstreamWt.Checkout(&git.CheckoutOptions{
+	if err := r.upstreamWt.Checkout(&git.CheckoutOptions{
 		Hash: toHash,
 	}); err != nil {
 		return fmt.Errorf("failed to checkout staging repository: %w", err)
@@ -371,37 +351,12 @@ func (r *Rebase) Rebase() error {
 			}
 		}
 
-		if err := r.Package.GeneratePatch(); err != nil {
+		if patchHash, err = r.updatePatches(); err != nil {
 			return fmt.Errorf("failed to generate patch: %w", err)
 		}
 
-		if patchHash, err = r.commitPatch(fmt.Sprintf("Updating %s to new base %s", r.Package.Name, toCommit.Hash)); err != nil {
-			return fmt.Errorf("failed to commit patch changes: %w", err)
-		}
-
-		pkgFile := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "package.yaml")
-		data, err := os.ReadFile(pkgFile)
-		if err != nil {
-			return fmt.Errorf("failed to read package options: %w", err)
-		}
-
-		pkgOpts := options.PackageOptions{}
-		if err := yaml.Unmarshal(data, &pkgOpts); err != nil {
-			return fmt.Errorf("failed to unmarshal package options: %w", err)
-		}
-
-		pkgOpts.MainChartOptions.UpstreamOptions.Commit = ToPtr(toHash.String())
-
-		if data, err = yaml.Marshal(pkgOpts); err != nil {
-			return fmt.Errorf("failed marshalling updated package options: %w", err)
-		}
-
-		if err := os.WriteFile(pkgFile, data, 0644); err != nil {
-			return fmt.Errorf("failed to write new package options: %w", err)
-		}
-
-		if packageHash, err = r.commitPackage("Update package.yaml"); err != nil {
-			return fmt.Errorf("failed to commit package.yaml changes: %w", err)
+		if packageHash, err = r.updatePackageYaml(); err != nil {
+			return fmt.Errorf("failed to update package.yaml: %w", err)
 		}
 
 		return nil

@@ -2,9 +2,20 @@ package rebase
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+)
+
+var (
+	// todo: we should load these to be the actual values if possible
+	commitOpts = git.CommitOptions{
+		Author: &object.Signature{
+			Name: "REBASE_BOT",
+		},
+	}
 )
 
 // todo: figure out why branching (create and delete) with go-git is not working
@@ -115,4 +126,23 @@ func IsWorktreeClean(wt *git.Worktree) (bool, error) {
 	}
 
 	return status.IsClean(), nil
+}
+
+func Commit(wt *git.Worktree, message string, paths ...string) (plumbing.Hash, error) {
+	for _, path := range paths {
+		if _, err := wt.Add(path); err != nil {
+			return plumbing.ZeroHash, fmt.Errorf("failed to add '%s' to index: %w", path, err)
+		}
+	}
+
+	if message == "" {
+		message = fmt.Sprintf("made changes to %s", strings.Join(paths, ", "))
+	}
+
+	hash, err := wt.Commit(message, &commitOpts)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("failed to commit changes: %w", err)
+	}
+
+	return hash, nil
 }
