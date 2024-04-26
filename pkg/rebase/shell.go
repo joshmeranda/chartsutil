@@ -12,11 +12,22 @@ import (
 )
 
 const (
-	// todo: maybe add commit to prompt
-	RcContents = `PS1="(interactive-rebase-shell)> "; alias abort='touch .abort_rebase && exit'`
+	ShellWelcomeMessage = `Welcome to the charts interactive rebase shell!
+< = = = = = = = = = = >
+
+The changes from the current upstream has been loaded into the current branch.
+Please look through the changed files to validate those changes and resolve conflicts.
+Once the index is in the desired state add all changes and run 'exit'!
+
+To abort the rebase at any time run 'abort'!`
 
 	AbortFileName = ".abort_rebase"
 )
+
+func getShellRcContents() []byte {
+	// todo: maybe add commit to prompt
+	return []byte(fmt.Sprintf(`PS1="(interactive-rebase-shell)> "; alias abort='touch %s && exit'; echo '%s'`, AbortFileName, ShellWelcomeMessage))
+}
 
 func (r *Rebase) shouldAbort() bool {
 	_, err := r.RootFs.Stat(AbortFileName)
@@ -58,7 +69,7 @@ func (r *Rebase) RunShell() error {
 		return fmt.Errorf("failed to create shell rc file: %w", err)
 	}
 
-	if _, err := f.Write([]byte(RcContents)); err != nil {
+	if _, err := f.Write(getShellRcContents()); err != nil {
 		return fmt.Errorf("failed to write to shell rc file: %w", err)
 	}
 	if err := f.Close(); err != nil {
