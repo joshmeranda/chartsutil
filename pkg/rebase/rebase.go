@@ -29,7 +29,6 @@ import (
 // todo: add welcome / introduction message to shell
 // todo: use yq rather than yaml for better formatting
 // todo: create an example rancher-charts to w0ork with for testing
-// todo: user plumbing.ZeroHash instead of plumbing.Hash{}
 
 const (
 	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
@@ -172,33 +171,33 @@ func (r *Rebase) updatePackageYaml() (plumbing.Hash, error) {
 	pkgFile := filepath.Join(r.PkgFs.Root(), chartspath.PackageOptionsFile)
 	relativePackagePath, err := filesystem.GetRelativePath(r.RootFs, pkgFile)
 	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to get relative path to package.yaml: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed to get relative path to package.yaml: %w", err)
 	}
 
 	data, err := os.ReadFile(pkgFile)
 	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to read package options: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed to read package options: %w", err)
 	}
 
 	pkgOpts := options.PackageOptions{}
 	if err := yaml.Unmarshal(data, &pkgOpts); err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to unmarshal package options: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed to unmarshal package options: %w", err)
 	}
 
 	// todo: update upstream options with new commit or URL
 	// pkgOpts.MainChartOptions.UpstreamOptions.Commit = &r.ToCommit
 
 	if data, err = yaml.Marshal(pkgOpts); err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed marshalling updated package options: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed marshalling updated package options: %w", err)
 	}
 
 	if err := os.WriteFile(pkgFile, data, 0644); err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to write new package options: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed to write new package options: %w", err)
 	}
 
 	hash, err := Commit(r.chartsWt, "updating package.yaml for", relativePackagePath)
 	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("failed to commit package.yaml changes: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed to commit package.yaml changes: %w", err)
 	}
 
 	return hash, nil
