@@ -150,7 +150,7 @@ type checkoutPuller struct {
 // Pull checks out the commit from upstream options and copies the files to the destination.
 //
 // Because this method mutatues the filesystem, it is not safe to call concurrently.
-func (p *checkoutPuller) Pull(rootFs, fs billy.Filesystem, path string) error {
+func (p *checkoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path string) error {
 	checkoutOpts := git.CheckoutOptions{
 		Hash: plumbing.NewHash(*p.opts.Commit),
 	}

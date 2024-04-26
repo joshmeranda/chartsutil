@@ -8,6 +8,8 @@ import (
 	"github.com/rancher/charts-build-scripts/pkg/puller"
 )
 
+// todo: rebase is not set up to update package upstream URLs
+
 type ForEachFunc func(p puller.Puller) error
 
 func ForEach(iter PullerIter, fn ForEachFunc) error {
@@ -46,18 +48,14 @@ func (i *singleIter) Next() (puller.Puller, error) {
 	return p, nil
 }
 
-type IterOptions struct {
-	ToCommit *string
-}
+func IterForUpstream(upstream puller.Puller, target string) (PullerIter, error) {
+	if target == "" {
+		return nil, fmt.Errorf("target cannot be empty")
+	}
 
-func IterForUpstream(upstream puller.Puller, opts IterOptions) (PullerIter, error) {
 	switch u := upstream.(type) {
 	case puller.GithubRepository:
-		if opts.ToCommit == nil {
-			return nil, fmt.Errorf("to commit is required for github upostreams")
-		}
-
-		return NewGitIter(u.GetOptions(), *opts.ToCommit)
+		return NewGitIter(u.GetOptions(), target)
 	default:
 		return &singleIter{
 			p: u,

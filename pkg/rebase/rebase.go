@@ -1,28 +1,35 @@
 package rebase
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/otiai10/copy"
+	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
+	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 	"github.com/rancher/charts-build-scripts/pkg/options"
+	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
+	"github.com/rancher/charts-build-scripts/pkg/puller"
 	"gopkg.in/yaml.v3"
 )
 
 // todo: might be a good idea to add some prefix to thesae branch names
 // todo: support backup functionality in case things go wrong
 // todo: hard reset on rebase error
+// todo: use filesystem functions instead of manual filepath.Join
+// todo: make shell replaceble with something non-interactive for testing
+// todo: add welcome / introduction message to shell
+// todo: use yq rather than yaml for better formatting
+// todo: create an example rancher-charts to w0ork with for testing
+// todo: user plumbing.ZeroHash instead of plumbing.Hash{}
 
 const (
 	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
@@ -36,30 +43,25 @@ const (
 )
 
 type Options struct {
-	Logger      *slog.Logger
-	StagingDir  string
-	ChartsDir   string
-	Incremental bool
+	Logger *slog.Logger
+	// ChartsDir string
 }
 
 type Rebase struct {
 	Options
 
-	Package  *charts.Package
-	ToCommit string
-
-	upstreamRepo *git.Repository
-	upstreamWt   *git.Worktree
+	Package *charts.Package
+	RootFs  billy.Filesystem
+	PkgFs   billy.Filesystem
+	Iter    utilpuller.PullerIter
 
 	chartsRepo *git.Repository
 	chartsWt   *git.Worktree
 }
 
-func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
-	if !strings.HasSuffix(pkg.Chart.Upstream.GetOptions().URL, ".git") {
-		return nil, fmt.Errorf("can only rebase packages with github upstreams")
-	}
+// todo: add util function for getting relavant info from an upstream (commit for git, / url for everything else)
 
+func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter utilpuller.PullerIter, opts Options) (*Rebase, error) {
 	if pkg.Chart.Upstream.GetOptions().Commit == nil {
 		return nil, fmt.Errorf("upstream commit is required")
 	}
@@ -68,7 +70,7 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 		opts.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	}
 
-	chartsRepo, err := git.PlainOpen(opts.ChartsDir)
+	chartsRepo, err := git.PlainOpen(rootFs.Root())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open charts repository: %w", err)
 	}
@@ -81,8 +83,10 @@ func NewRebase(pkg *charts.Package, to string, opts Options) (*Rebase, error) {
 	return &Rebase{
 		Options: opts,
 
-		Package:  pkg,
-		ToCommit: to,
+		Package: pkg,
+		RootFs:  rootFs,
+		PkgFs:   pkgFs,
+		Iter:    iter,
 
 		chartsRepo: chartsRepo,
 		chartsWt:   chartsWorktree,
@@ -93,61 +97,15 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 	return Commit(r.chartsWt, msg, path.Join("packages", r.Package.Name))
 }
 
-func (r *Rebase) getUpstreamCommitsBetween(from *object.Commit, to *object.Commit) ([]*object.Commit, error) {
-	subDir := r.Package.Chart.Upstream.GetOptions().Subdirectory
-
-	r.Logger.Info("checking upstream for commits in range", "from", from.Hash.String(), "to", to.Hash.String())
-
-	// increment "since" to avoid including the current commit
-	since := from.Committer.When.Add(1)
-	logOpts := git.LogOptions{
-		From:  to.Hash,
-		Order: git.LogOrderDefault,
-		PathFilter: func(p string) bool {
-			if subDir == nil {
-				return true
-			}
-
-			return strings.HasPrefix(p, *subDir)
-		},
-		Since: &since,
-	}
-
-	commitIter, err := r.upstreamRepo.Log(&logOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get chart commits: %w", err)
-	}
-
-	commits := make([]*object.Commit, 0)
-	_ = commitIter.ForEach(func(c *object.Commit) error {
-		commits = append(commits, c)
-		return nil
-	})
-
-	return commits, nil
-}
-
-func (r *Rebase) handleCommit(commit *object.Commit) error {
-	if err := CheckoutHash(r.upstreamWt, commit.Hash); err != nil {
-		return fmt.Errorf("failed to checkout commit '%s': %w", commit.Hash.String(), err)
-	}
-
+func (r *Rebase) handleUpstream(p puller.Puller) error {
 	if err := CreateBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME)
 
 	err := DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_STAGING_BRANCH_NAME, func(wt *git.Worktree) error {
-		src := r.StagingDir
-
-		if dir := r.Package.Upstream.GetOptions().Subdirectory; dir != nil {
-			src = filepath.Join(r.StagingDir, *dir)
-		}
-
-		dst := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "charts")
-
-		if err := copy.Copy(src, dst, copy.Options{Skip: shouldSkip}); err != nil {
-			return fmt.Errorf("failed to copy files from stage to worktree: %w", err)
+		if err := p.Pull(r.RootFs, r.PkgFs, r.Package.WorkingDir); err != nil {
+			return fmt.Errorf("failed to pull upstream changes: %w", err)
 		}
 
 		if _, err := r.commitCharts("saving copied upstream charts"); err != nil {
@@ -162,7 +120,7 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 
 	// need to run as subprocess since go-git Pull only supports fast-forward merges
 	cmd := exec.Command("git", "merge", "--squash", "--no-commit", CHARTS_STAGING_BRANCH_NAME)
-	cmd.Dir = r.ChartsDir
+	cmd.Dir = r.RootFs.Root()
 
 	r.Logger.Info("merging branch", "cmd", cmd.String(), "dir", cmd.Dir)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -182,7 +140,7 @@ func (r *Rebase) handleCommit(commit *object.Commit) error {
 		}
 	}
 
-	if _, err := r.commitCharts(fmt.Sprintf("brining charts to %s", commit.Hash.String())); err != nil {
+	if _, err := r.commitCharts(fmt.Sprintf("brining charts to %s", "NEW COMMIT OR URL")); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
@@ -196,7 +154,7 @@ func (r *Rebase) updatePatches() (plumbing.Hash, error) {
 
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
-	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, r.ToCommit), patchDir)
+	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, "NEW COMMIT OR URL"), patchDir)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit patch changes: %w", err)
 	}
@@ -205,7 +163,12 @@ func (r *Rebase) updatePatches() (plumbing.Hash, error) {
 }
 
 func (r *Rebase) updatePackageYaml() (plumbing.Hash, error) {
-	pkgFile := filepath.Join(r.ChartsDir, "packages", r.Package.Name, "package.yaml")
+	pkgFile := filepath.Join(r.PkgFs.Root(), chartspath.PackageOptionsFile)
+	relativePackagePath, err := filesystem.GetRelativePath(r.RootFs, pkgFile)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("failed to get relative path to package.yaml: %w", err)
+	}
+
 	data, err := os.ReadFile(pkgFile)
 	if err != nil {
 		return plumbing.Hash{}, fmt.Errorf("failed to read package options: %w", err)
@@ -216,7 +179,8 @@ func (r *Rebase) updatePackageYaml() (plumbing.Hash, error) {
 		return plumbing.Hash{}, fmt.Errorf("failed to unmarshal package options: %w", err)
 	}
 
-	pkgOpts.MainChartOptions.UpstreamOptions.Commit = &r.ToCommit
+	// todo: update upstream options with new commit or url
+	// pkgOpts.MainChartOptions.UpstreamOptions.Commit = &r.ToCommit
 
 	if data, err = yaml.Marshal(pkgOpts); err != nil {
 		return plumbing.Hash{}, fmt.Errorf("failed marshalling updated package options: %w", err)
@@ -226,7 +190,7 @@ func (r *Rebase) updatePackageYaml() (plumbing.Hash, error) {
 		return plumbing.Hash{}, fmt.Errorf("failed to write new package options: %w", err)
 	}
 
-	hash, err := Commit(r.chartsWt, "updating package.yaml for", pkgFile)
+	hash, err := Commit(r.chartsWt, "updating package.yaml for", relativePackagePath)
 	if err != nil {
 		return plumbing.Hash{}, fmt.Errorf("failed to commit package.yaml changes: %w", err)
 	}
@@ -266,65 +230,6 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("charts worktree is not clean")
 	}
 
-	if r.StagingDir == "" {
-		r.StagingDir, err = os.MkdirTemp("", "chart-utils-rebase-*")
-		if err != nil {
-			return fmt.Errorf("failed to create temporary directory: %w", err)
-		}
-	}
-
-	r.upstreamRepo, err = git.PlainOpen(r.StagingDir)
-	if errors.Is(git.ErrRepositoryNotExists, err) {
-		upstreamCloneOpts := git.CloneOptions{
-			URL: r.Package.Chart.Upstream.GetOptions().URL,
-		}
-
-		r.Logger.Info("no repository exists at staging dir, attempting to clone...", "staging-dir", r.StagingDir, "url", upstreamCloneOpts.URL)
-
-		r.upstreamRepo, err = git.PlainClone(r.StagingDir, false, &upstreamCloneOpts)
-		if err != nil && !errors.Is(git.ErrRepositoryAlreadyExists, err) {
-			return fmt.Errorf("failed to clone upstream repository: %w", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("failed to open staging repository: %w", err)
-	} else {
-		r.Logger.Info("using existing staging repository", "dir", r.StagingDir)
-	}
-
-	r.upstreamWt, err = r.upstreamRepo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get staging worktree: %w", err)
-	}
-
-	fromHash := plumbing.NewHash(*r.Package.Chart.Upstream.GetOptions().Commit)
-	fromCommit, err := r.upstreamRepo.CommitObject(fromHash)
-	if err != nil {
-		return fmt.Errorf("failed to get commit object for '%s': %w", *r.Package.Chart.Upstream.GetOptions().Commit, err)
-	}
-
-	toHash := plumbing.NewHash(r.ToCommit)
-	toCommit, err := r.upstreamRepo.CommitObject(toHash)
-	if err != nil {
-		return fmt.Errorf("failed to get commit object for '%s': %w", r.ToCommit, err)
-	}
-
-	if err := r.upstreamWt.Checkout(&git.CheckoutOptions{
-		Hash: toHash,
-	}); err != nil {
-		return fmt.Errorf("failed to checkout staging repository: %w", err)
-	}
-
-	var commits []*object.Commit
-	if r.Incremental {
-		commits, err = r.getUpstreamCommitsBetween(fromCommit, toCommit)
-		if err != nil {
-			return fmt.Errorf("failed to get upstream commits: %w", err)
-		}
-		r.Logger.Info(fmt.Sprintf("found %d commits", len(commits)))
-	} else {
-		commits = []*object.Commit{toCommit}
-	}
-
 	if err := CreateBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME); err != nil {
 		return fmt.Errorf("failed to create quarantine branch: %w", err)
 	}
@@ -340,16 +245,17 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to prepare the chart")
 		}
 
-		for _, commit := range commits {
-			r.Logger.Info("bringing chart to commit", "commit", commit.Hash.String())
-			if _, err := r.commitCharts("copying current charts"); err != nil {
-				return fmt.Errorf("failed to commit prepared package: %w", err)
-			}
-
-			if err := r.handleCommit(commit); err != nil {
-				return fmt.Errorf("error bringing chart to commit: %w", err)
-			}
+		if _, err := r.commitCharts("preparing package"); err != nil {
+			return fmt.Errorf("failed to save charts before pulling new upstream: %w", err)
 		}
+
+		// utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
+		// 	if err := r.handleUpstream(p); err != nil {
+		// 		return fmt.Errorf("failed to handle upstream: %w", err)
+		// 	}
+
+		// 	return nil
+		// })
 
 		if patchHash, err = r.updatePatches(); err != nil {
 			return fmt.Errorf("failed to generate patch: %w", err)
@@ -370,7 +276,9 @@ func (r *Rebase) Rebase() error {
 	time.Sleep(time.Second * 2)
 
 	cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
-	cmd.Dir = r.ChartsDir
+	cmd.Dir = r.PkgFs.Root()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to cherry-pick changes: %w", err)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 )
 
 const (
@@ -13,7 +12,7 @@ const (
 )
 
 func (r *Rebase) shouldAbort() bool {
-	_, err := os.Stat(r.ChartsDir + "/.abort_rebase")
+	_, err := os.Stat(r.RootFs.Join(".abort_rebase"))
 	return err == nil
 }
 
@@ -33,7 +32,7 @@ func (r *Rebase) RunShell() error {
 
 	for {
 		cmd := exec.Command("bash", "--rcfile", f.Name(), "-i")
-		cmd.Dir = r.ChartsDir
+		cmd.Dir = r.RootFs.Root()
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -43,13 +42,14 @@ func (r *Rebase) RunShell() error {
 		}
 
 		if r.shouldAbort() {
-			if err := os.Remove(path.Join(r.ChartsDir, ".abort_rebase")); err != nil {
+			if err := os.Remove(r.RootFs.Join(".abort_rebase")); err != nil {
 				r.Logger.Error("failed to remove '.abort_rebase' file: %w", err)
 			}
 
 			return fmt.Errorf("rebase aborted by user")
 		}
 
+		// todo: check not for a clean workspace but that everything is staged
 		isClean, err := IsWorktreeClean(r.chartsWt)
 		if err != nil {
 			return fmt.Errorf("failed to check if worktree is clean: %w", err)
