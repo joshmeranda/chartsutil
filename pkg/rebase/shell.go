@@ -4,16 +4,52 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 )
 
 const (
 	// todo: maybe add commit to prompt
-	RC_CONTENTS = `PS1="(interactive-rebase-shell)> "; alias abort='touch .abort_rebase && exit'`
+	RcContents = `PS1="(interactive-rebase-shell)> "; alias abort='touch .abort_rebase && exit'`
+
+	AbortFileName = ".abort_rebase"
 )
 
 func (r *Rebase) shouldAbort() bool {
-	_, err := os.Stat(r.RootFs.Join(".abort_rebase"))
+	_, err := r.RootFs.Stat(AbortFileName)
 	return err == nil
+}
+
+func (r *Rebase) checkWorktree() (string, error) {
+	status, err := r.chartsWt.Status()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree status: %w", err)
+	}
+
+	generatedChangesDir, err := filesystem.GetRelativePath(r.RootFs, filepath.Join(r.PkgFs.Root(), "generated-changes"))
+	if err != nil {
+		return "", fmt.Errorf("failed to get relative path to generated-changes: %w", err)
+	}
+
+	chartsDir, err := filesystem.GetRelativePath(r.RootFs, filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir))
+	if err != nil {
+		return "", fmt.Errorf("failed to get relative path to charts dir: %w", err)
+	}
+
+	for file, fs := range status {
+		if fs.Worktree != git.Unmodified {
+			return "there are unstaged changes in the worktree", nil
+		}
+
+		if !strings.HasPrefix(file, generatedChangesDir) && !strings.HasPrefix(file, chartsDir) {
+			return fmt.Sprintf("only changes to %s and %s are allowed", generatedChangesDir, chartsDir), nil
+		}
+	}
+
+	return "", nil
 }
 
 func (r *Rebase) RunShell() error {
@@ -22,7 +58,7 @@ func (r *Rebase) RunShell() error {
 		return fmt.Errorf("failed to create shell rc file: %w", err)
 	}
 
-	if _, err := f.Write([]byte(RC_CONTENTS)); err != nil {
+	if _, err := f.Write([]byte(RcContents)); err != nil {
 		return fmt.Errorf("failed to write to shell rc file: %w", err)
 	}
 	if err := f.Close(); err != nil {
@@ -42,24 +78,34 @@ func (r *Rebase) RunShell() error {
 		}
 
 		if r.shouldAbort() {
-			if err := os.Remove(r.RootFs.Join(".abort_rebase")); err != nil {
-				r.Logger.Error("failed to remove '.abort_rebase' file: %w", err)
+			if err := r.RootFs.Remove(AbortFileName); err != nil {
+				r.Logger.Error("failed to remove abort file: %w", err)
 			}
 
 			return fmt.Errorf("rebase aborted by user")
 		}
 
-		// todo: check not for a clean workspace but that everything is staged
-		isClean, err := IsWorktreeClean(r.chartsWt)
+		msg, err := r.checkWorktree()
 		if err != nil {
 			return fmt.Errorf("failed to check if worktree is clean: %w", err)
 		}
 
-		if isClean {
+		if msg == "" {
 			break
 		}
 
-		r.Logger.Warn("worktree is not clean, re-running shell")
+		// todo: check not for a clean workspace but that everything is staged
+		// isClean, err := IsWorktreeClean(r.chartsWt)
+		// if err != nil {
+		// 	return fmt.Errorf("failed to check if worktree is clean: %w", err)
+		// }
+
+		// if isClean {
+		// 	break
+		// }
+
+		r.Logger.Error("worktree failed pre-commit checks", "msg", msg)
+		r.Logger.Warn("re-running shell...")
 	}
 
 	return nil

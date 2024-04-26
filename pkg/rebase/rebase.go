@@ -152,11 +152,17 @@ func (r *Rebase) updatePatches() (plumbing.Hash, error) {
 		return plumbing.ZeroHash, fmt.Errorf("failed to generate patch: %w", err)
 	}
 
+	r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset})
+
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
 	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, "NEW COMMIT OR URL"), patchDir)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit patch changes: %w", err)
+	}
+
+	if err := r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset}); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("failed to revert changes to chart")
 	}
 
 	return hash, nil
@@ -179,7 +185,7 @@ func (r *Rebase) updatePackageYaml() (plumbing.Hash, error) {
 		return plumbing.Hash{}, fmt.Errorf("failed to unmarshal package options: %w", err)
 	}
 
-	// todo: update upstream options with new commit or url
+	// todo: update upstream options with new commit or URL
 	// pkgOpts.MainChartOptions.UpstreamOptions.Commit = &r.ToCommit
 
 	if data, err = yaml.Marshal(pkgOpts); err != nil {
@@ -249,13 +255,13 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to save charts before pulling new upstream: %w", err)
 		}
 
-		// utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
-		// 	if err := r.handleUpstream(p); err != nil {
-		// 		return fmt.Errorf("failed to handle upstream: %w", err)
-		// 	}
+		utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
+			if err := r.handleUpstream(p); err != nil {
+				return fmt.Errorf("failed to handle upstream: %w", err)
+			}
 
-		// 	return nil
-		// })
+			return nil
+		})
 
 		if patchHash, err = r.updatePatches(); err != nil {
 			return fmt.Errorf("failed to generate patch: %w", err)

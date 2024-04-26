@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/go-github/github"
 	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/display"
+	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/joshmeranda/chartsutil/pkg/release"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
@@ -29,8 +31,20 @@ var (
 func pkgRebase(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
-	rootFs := filesystem.GetFilesystem(chartsDir)
 	incremental := !ctx.Bool("non-incremental")
+
+	// if ctx.NArg() != 1 {
+	// 	return fmt.Errorf("expected exactly one argument, got %d", ctx.NArg())
+	// }
+	//
+	// rebaseTarget := ctx.Args().First()
+	rebaseTarget := "be3f43b07c7c3f034f6aada9af90a812a0b44aa8"
+
+	rootFs := filesystem.GetFilesystem(chartsDir)
+	pkgFs, err := rootFs.Chroot(filepath.Join("packages", pkgName))
+	if err != nil {
+		return fmt.Errorf("failed to chroot to package dir: %w", err)
+	}
 
 	gitRoot, err := os.MkdirTemp(os.TempDir(), "chart-utils-")
 	if err != nil {
@@ -43,20 +57,30 @@ func pkgRebase(ctx *cli.Context) error {
 		return err
 	}
 
-	opts := rebase.Options{
-		Logger:      logger,
-		StagingDir:  "rebase-root",
-		ChartsDir:   chartsDir,
-		Incremental: incremental,
+	var iter utilpuller.PullerIter
+
+	if incremental {
+		iter, err = utilpuller.IterForUpstream(pkg.Chart.Upstream, rebaseTarget)
+		if err != nil {
+			return fmt.Errorf("failed to create puller iterator: %w", err)
+		}
+	} else {
+		// todo: set this to something else
+		iter = nil
 	}
 
-	rb, err := rebase.NewRebase(pkg, "be3f43b07c7c3f034f6aada9af90a812a0b44aa8", opts)
+	opts := rebase.Options{
+		Logger: logger,
+		// ChartsDir: chartsDir,
+	}
+
+	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)
 	if err != nil {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
 	defer rb.Close()
 
-	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rb.ToCommit)
+	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rebaseTarget)
 
 	if err := rb.Rebase(); err != nil {
 		return err
@@ -183,9 +207,10 @@ func main() {
 				},
 			},
 			{
-				Name:        "rebase",
-				Action:      pkgRebase,
-				Description: "Rebase a chart to a new version of the base chart",
+				Name:      "rebase",
+				Action:    pkgRebase,
+				Usage:     "Rebase a chart to a new version of the base chart",
+				UsageText: "chart-utils rebase [options] <commit|url>",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "non-incremental",
@@ -196,11 +221,7 @@ func main() {
 		},
 	}
 
-	args := os.Args
-	// args := []string{"chartsutil", "--charts-dir", "/home/wrinkle/downloads/rancher-charts", "--package", "rancher-rebase-example", "rebase"}
-	// args := []string{"chartsutil", "--charts-dir", "/home/wrinkle/downloads/rancher-charts", "--package", "rancher-monitoring/rancher-node-exporter", "rebase"}
-
-	if err := app.Run(args); err != nil {
+	if err := app.Run(os.Args); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
