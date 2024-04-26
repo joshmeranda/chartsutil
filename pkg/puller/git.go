@@ -106,18 +106,18 @@ func (i *GitIter) init() error {
 	return nil
 }
 
-func (i *GitIter) Next() (puller.Puller, error, bool) {
+func (i *GitIter) Next() (puller.Puller, error) {
 	if !i.isInit {
 		if err := i.init(); err != nil {
-			return nil, fmt.Errorf("failed to init git iter: %w", err), false
+			return nil, fmt.Errorf("failed to init git iter: %w", err)
 		}
 	}
 
 	commit, err := i.commitIter.Next()
 	if errors.Is(err, io.EOF) {
-		return nil, nil, false
+		return nil, err
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get next commit: %w", err), false
+		return nil, fmt.Errorf("failed to get next commit: %w", err)
 	}
 
 	commitStr := commit.Hash.String()
@@ -131,26 +131,7 @@ func (i *GitIter) Next() (puller.Puller, error, bool) {
 		},
 	}
 
-	return p, nil, false
-}
-
-func (i *GitIter) ForEach(f func(puller.Puller) error) error {
-	for {
-		p, err, ok := i.Next()
-		if !ok {
-			break
-		}
-
-		if err != nil {
-			return err
-		}
-
-		if err := f(p); err != nil {
-			return fmt.Errorf("for each func failed: %w", err)
-		}
-	}
-
-	return nil
+	return p, nil
 }
 
 func shouldSkip(srcinfo os.FileInfo, src, dest string) (bool, error) {
