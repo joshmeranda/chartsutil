@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/puller"
 )
 
@@ -33,17 +34,17 @@ type PullerIter interface {
 	Next() (puller.Puller, error)
 }
 
-type singleIter struct {
-	p puller.Puller
+type SingleIter struct {
+	Puller puller.Puller
 }
 
-func (i *singleIter) Next() (puller.Puller, error) {
-	if i.p == nil {
-		return i.p, io.EOF
+func (i *SingleIter) Next() (puller.Puller, error) {
+	if i.Puller == nil {
+		return i.Puller, io.EOF
 	}
 
-	p := i.p
-	i.p = nil
+	p := i.Puller
+	i.Puller = nil
 
 	return p, nil
 }
@@ -57,8 +58,26 @@ func IterForUpstream(upstream puller.Puller, target string) (PullerIter, error) 
 	case puller.GithubRepository:
 		return NewGitIter(u.GetOptions(), target)
 	default:
-		return &singleIter{
-			p: u,
-		}, nil
+		return NewSingleIter(upstream, target)
 	}
+}
+
+func NewSingleIter(upstream puller.Puller, target string) (PullerIter, error) {
+	opts := upstream.GetOptions()
+
+	switch upstream.(type) {
+	case puller.GithubRepository:
+		opts.Commit = &target
+	default:
+		opts.URL = target
+	}
+
+	p, err := charts.GetUpstream(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get upstream: %w", err)
+	}
+
+	return &SingleIter{
+		Puller: p,
+	}, nil
 }

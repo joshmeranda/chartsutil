@@ -31,7 +31,7 @@ var (
 func pkgRebase(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
-	incremental := !ctx.Bool("non-incremental")
+	incremental := ctx.Bool("increment")
 
 	// if ctx.NArg() != 1 {
 	// 	return fmt.Errorf("expected exactly one argument, got %d", ctx.NArg())
@@ -66,12 +66,14 @@ func pkgRebase(ctx *cli.Context) error {
 		}
 	} else {
 		// todo: set this to something else
-		iter = nil
+		iter, err = utilpuller.NewSingleIter(pkg.Chart.Upstream, rebaseTarget)
+		if err != nil {
+			return fmt.Errorf("failed to create single puller: %w", err)
+		}
 	}
 
 	opts := rebase.Options{
 		Logger: logger,
-		// ChartsDir: chartsDir,
 	}
 
 	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)
@@ -212,8 +214,8 @@ func main() {
 				UsageText: "chart-utils rebase [options] <commit|url>",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
-						Name:  "non-incremental",
-						Usage: "jump to the last commit instead of incrementally checking each commit",
+						Name:  "increment",
+						Usage: "iterate through intermediary versions until the target upstream is achieved (only meaningful fr giuthub upstreams)",
 					},
 				},
 			},
