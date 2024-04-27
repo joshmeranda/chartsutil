@@ -41,7 +41,6 @@ const (
 
 type Options struct {
 	Logger *slog.Logger
-	// ChartsDir string
 }
 
 type Rebase struct {
@@ -299,16 +298,6 @@ func (r *Rebase) Rebase() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to cherry-pick changes: %w", err)
 	}
-
-	return nil
-}
-
-func (r *Rebase) Close() error {
-	// if r.StagingDir != "" {
-	// 	if err := os.RemoveAll(r.StagingDir); err != nil {
-	// 		return fmt.Errorf("failed to remove staging directory: %w", err)
-	// 	}
-	// }
 
 	return nil
 }

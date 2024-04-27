@@ -78,7 +78,6 @@ func pkgRebase(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
-	defer rb.Close()
 
 	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rebaseTarget)
 
