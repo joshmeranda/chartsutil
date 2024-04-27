@@ -15,6 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
+	cp "github.com/otiai10/copy"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 	"github.com/rancher/charts-build-scripts/pkg/options"
@@ -24,9 +25,9 @@ import (
 )
 
 // todo: might be a good idea to add some prefix to thesae branch names
-// todo: support backup functionality in case things go wrong
 // todo: use yq rather than yaml for better formatting
 // todo: create an example rancher-charts to w0ork with for testing
+// todo: check for some obvious errors in rebase (unresolved conflicts, helm templating failing, etc)
 
 const (
 	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
@@ -37,11 +38,14 @@ const (
 
 	// CHARTS_UPSTREAM_BRANCH_NAME is the name of the branch that tracks the upstream repository.
 	CHARTS_UPSTREAM_BRANCH_NAME = "upstream"
+
+	RebaseBackupDir = ".rebase-backup"
 )
 
 type Options struct {
-	Logger   *slog.Logger
-	Resolver resolve.Resolver
+	Logger       *slog.Logger
+	Resolver     resolve.Resolver
+	EnableBackup bool
 }
 
 type Rebase struct {
@@ -217,28 +221,6 @@ func (r *Rebase) updatePackageYaml(newOpts options.UpstreamOptions) (plumbing.Ha
 	return hash, nil
 }
 
-// Rebase brings the package to the specified commit, optinoally letting the user interact with the changes at each step.
-//
-// The basic algorithm is as follows:
-//  1. Clone the upstream repository to a temporary directory
-//  2. In the charts repo:
-//     a. Create a quarantine branch, where all changes will be made before merging back to the main branch
-//     b. Prepare the target package
-//     c. Commit the prepared charts (package/<package name>/charts)
-//  3. If running interactively, calculate the commits between the current commit and the target upstream commit, otherwise a list of just the upstream commit is used
-//  4. For each commit:
-//     a. In the upstream repo, checkout the commit
-//     b. In the charts repo create a staging branch to copy the upstream files into
-//     c. Copy the files from the upstream repo to the charts repo staging branch
-//     d. Commit the changes
-//     e. Merge the staging branch into the quarantine branch
-//     f. Resolve any conflict via interactive shell
-//  5. On the quarantine branch
-//     a. Generate and commit the chart patch
-//     b. Update the package.yaml with the new uipstream info (commit, url, etc) and commit those changes
-//  5. Pull in the patch and package.yaml commits from the quarantine branch to the main branch
-//
-// todo: add support for non-git repositories (oci, archive, etc)
 func (r *Rebase) Rebase() error {
 	isClean, err := IsWorktreeClean(r.chartsWt)
 	if err != nil {
@@ -271,6 +253,18 @@ func (r *Rebase) Rebase() error {
 		var last puller.Puller
 
 		err := utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
+			if r.EnableBackup {
+				defer func() {
+					r.Logger.Info("backing up current state of charts")
+					src := filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir)
+					dst := filepath.Join(RebaseBackupDir)
+
+					if err := cp.Copy(src, dst, cp.Options{}); err != nil {
+						r.Logger.Warn("failed to backup %s: %s", src, err.Error())
+					}
+				}()
+			}
+
 			last = p
 
 			if err := r.handleUpstream(p); err != nil {

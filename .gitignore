@@ -28,3 +28,6 @@ go.work
 
 # IDE files and directories
 .vscode
+
+# Program generated files and directories
+.rebase-backup

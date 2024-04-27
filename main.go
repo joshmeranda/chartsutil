@@ -32,13 +32,13 @@ func pkgRebase(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
 	incremental := ctx.Bool("increment")
+	backup := ctx.Bool("backup")
 
-	// if ctx.NArg() != 1 {
-	// 	return fmt.Errorf("expected exactly one argument, got %d", ctx.NArg())
-	// }
-	//
-	// rebaseTarget := ctx.Args().First()
-	rebaseTarget := "be3f43b07c7c3f034f6aada9af90a812a0b44aa8"
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("expected exactly one argument, got %d", ctx.NArg())
+	}
+
+	rebaseTarget := ctx.Args().First()
 
 	rootFs := filesystem.GetFilesystem(chartsDir)
 	pkgFs, err := rootFs.Chroot(filepath.Join("packages", pkgName))
@@ -73,7 +73,8 @@ func pkgRebase(ctx *cli.Context) error {
 	}
 
 	opts := rebase.Options{
-		Logger: logger,
+		Logger:       logger,
+		EnableBackup: backup,
 	}
 
 	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)
@@ -216,6 +217,10 @@ func main() {
 					&cli.BoolFlag{
 						Name:  "increment",
 						Usage: "iterate through intermediary versions until the target upstream is achieved (only meaningful fr giuthub upstreams)",
+					},
+					&cli.BoolFlag{
+						Name:  "backup",
+						Usage: "create a backup of the package working dir after each upstream is merged",
 					},
 				},
 			},

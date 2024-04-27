@@ -24,3 +24,6 @@ func GetRelaventUpstreamChange(upstream puller.Puller) string {
 		return opts.URL
 	}
 }
+
+func Exists(path string) {
+}
