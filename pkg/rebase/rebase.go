@@ -254,13 +254,16 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to save charts before pulling new upstream: %w", err)
 		}
 
-		utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
+		err := utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
 			if err := r.handleUpstream(p); err != nil {
 				return fmt.Errorf("failed to handle upstream: %w", err)
 			}
 
 			return nil
 		})
+		if err != nil {
+			return err
+		}
 
 		if patchHash, err = r.updatePatches(); err != nil {
 			return fmt.Errorf("failed to generate patch: %w", err)

@@ -105,16 +105,6 @@ func (r *Rebase) RunShell() error {
 			break
 		}
 
-		// todo: check not for a clean workspace but that everything is staged
-		// isClean, err := IsWorktreeClean(r.chartsWt)
-		// if err != nil {
-		// 	return fmt.Errorf("failed to check if worktree is clean: %w", err)
-		// }
-
-		// if isClean {
-		// 	break
-		// }
-
 		r.Logger.Error("worktree failed pre-commit checks", "msg", msg)
 		r.Logger.Warn("re-running shell...")
 	}
