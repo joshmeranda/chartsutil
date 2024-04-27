@@ -24,6 +24,10 @@ To abort the rebase at any time run 'abort'!`
 	AbortFileName = ".abort_rebase"
 )
 
+var (
+	ErrAbort = fmt.Errorf("rebase aborted by user")
+)
+
 func getShellRcContents() []byte {
 	// todo: maybe add commit to prompt
 	return []byte(fmt.Sprintf(`PS1="(interactive-rebase-shell)> "; alias abort='touch %s && exit'; echo '%s'`, AbortFileName, ShellWelcomeMessage))
@@ -93,7 +97,7 @@ func (r *Rebase) RunShell() error {
 				r.Logger.Error("failed to remove abort file: %w", err)
 			}
 
-			return fmt.Errorf("rebase aborted by user")
+			return ErrAbort
 		}
 
 		msg, err := r.checkWorktree()

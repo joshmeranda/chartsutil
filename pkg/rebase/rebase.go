@@ -1,6 +1,7 @@
 package rebase
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -23,10 +24,7 @@ import (
 
 // todo: might be a good idea to add some prefix to thesae branch names
 // todo: support backup functionality in case things go wrong
-// todo: hard reset on rebase error
-// todo: use filesystem functions instead of manual filepath.Join
 // todo: make shell replaceble with something non-interactive for testing
-// todo: add welcome / introduction message to shell
 // todo: use yq rather than yaml for better formatting
 // todo: create an example rancher-charts to w0ork with for testing
 
@@ -134,7 +132,17 @@ func (r *Rebase) handleUpstream(p puller.Puller) error {
 
 	if !isClean {
 		r.Logger.Info("could not merge automatically, running interactive shell...")
-		if err := r.RunShell(); err != nil {
+		err := r.RunShell()
+
+		if errors.Is(err, ErrAbort) {
+			if err := r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset}); err != nil {
+				return fmt.Errorf("failed to reset worktree after abort: %w", err)
+			}
+
+			return err
+		}
+
+		if err != nil {
 			return fmt.Errorf("received error from shell: %w", err)
 		}
 	}
