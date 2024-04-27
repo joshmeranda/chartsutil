@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/resolve"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 	"github.com/rancher/charts-build-scripts/pkg/options"
@@ -24,7 +25,6 @@ import (
 
 // todo: might be a good idea to add some prefix to thesae branch names
 // todo: support backup functionality in case things go wrong
-// todo: make shell replaceble with something non-interactive for testing
 // todo: use yq rather than yaml for better formatting
 // todo: create an example rancher-charts to w0ork with for testing
 
@@ -40,7 +40,8 @@ const (
 )
 
 type Options struct {
-	Logger *slog.Logger
+	Logger   *slog.Logger
+	Resolver resolve.Resolver
 }
 
 type Rebase struct {
@@ -64,6 +65,13 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	}
+
+	if opts.Resolver == nil {
+		opts.Resolver = &resolve.Shell{
+			Logger:  opts.Logger.WithGroup("shell"),
+			Package: pkg,
+		}
 	}
 
 	chartsRepo, err := git.PlainOpen(rootFs.Root())
@@ -131,9 +139,9 @@ func (r *Rebase) handleUpstream(p puller.Puller) error {
 
 	if !isClean {
 		r.Logger.Info("could not merge automatically, running interactive shell...")
-		err := r.RunShell()
+		err := r.Resolver.Resolve(r.chartsWt)
 
-		if errors.Is(err, ErrAbort) {
+		if errors.Is(err, resolve.ErrAbort) {
 			if err := r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset}); err != nil {
 				return fmt.Errorf("failed to reset worktree after abort: %w", err)
 			}

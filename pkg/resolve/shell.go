@@ -1,14 +1,18 @@
-package rebase
+package resolve
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
+	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
+	"github.com/rancher/charts-build-scripts/pkg/path"
 )
 
 const (
@@ -24,35 +28,34 @@ To abort the rebase at any time run 'abort'!`
 	AbortFileName = ".abort_rebase"
 )
 
-var (
-	ErrAbort = fmt.Errorf("rebase aborted by user")
-)
-
 func getShellRcContents() []byte {
 	// todo: maybe add commit to prompt
 	return []byte(fmt.Sprintf(`PS1="(interactive-rebase-shell)> "; alias abort='touch %s && exit'; echo '%s'`, AbortFileName, ShellWelcomeMessage))
 }
 
-func (r *Rebase) shouldAbort() bool {
-	_, err := r.RootFs.Stat(AbortFileName)
+type Shell struct {
+	Logger  *slog.Logger
+	Package *charts.Package
+}
+
+func (s *Shell) shouldAbort(fs billy.Filesystem) bool {
+	_, err := fs.Stat(AbortFileName)
 	return err == nil
 }
 
-func (r *Rebase) checkWorktree() (string, error) {
-	status, err := r.chartsWt.Status()
+func (s *Shell) checkWorktree(wt *git.Worktree) (string, error) {
+	status, err := wt.Status()
 	if err != nil {
 		return "", fmt.Errorf("failed to get worktree status: %w", err)
 	}
 
-	generatedChangesDir, err := filesystem.GetRelativePath(r.RootFs, filepath.Join(r.PkgFs.Root(), "generated-changes"))
+	pkgDir, err := filesystem.GetRelativePath(wt.Filesystem, filepath.Join(path.RepositoryPackagesDir, s.Package.Name))
 	if err != nil {
-		return "", fmt.Errorf("failed to get relative path to generated-changes: %w", err)
+		return "", fmt.Errorf("failed to get path to package dir")
 	}
 
-	chartsDir, err := filesystem.GetRelativePath(r.RootFs, filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir))
-	if err != nil {
-		return "", fmt.Errorf("failed to get relative path to charts dir: %w", err)
-	}
+	generatedChangesDir := filepath.Join(pkgDir, path.GeneratedChangesDir)
+	chartsDir := filepath.Join(pkgDir, s.Package.WorkingDir)
 
 	for file, fs := range status {
 		if fs.Worktree != git.Unmodified {
@@ -67,7 +70,7 @@ func (r *Rebase) checkWorktree() (string, error) {
 	return "", nil
 }
 
-func (r *Rebase) RunShell() error {
+func (s *Shell) Resolve(wt *git.Worktree) error {
 	f, err := os.CreateTemp("", "rebase-shell-rc-*")
 	if err != nil {
 		return fmt.Errorf("failed to create shell rc file: %w", err)
@@ -83,7 +86,7 @@ func (r *Rebase) RunShell() error {
 
 	for {
 		cmd := exec.Command("bash", "--rcfile", f.Name(), "-i")
-		cmd.Dir = r.RootFs.Root()
+		cmd.Dir = wt.Filesystem.Root()
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -92,15 +95,15 @@ func (r *Rebase) RunShell() error {
 			return err
 		}
 
-		if r.shouldAbort() {
-			if err := r.RootFs.Remove(AbortFileName); err != nil {
-				r.Logger.Error("failed to remove abort file: %w", err)
+		if s.shouldAbort(wt.Filesystem) {
+			if err := wt.Filesystem.Remove(AbortFileName); err != nil {
+				s.Logger.Error("failed to remove abort file: %w", err)
 			}
 
 			return ErrAbort
 		}
 
-		msg, err := r.checkWorktree()
+		msg, err := s.checkWorktree(wt)
 		if err != nil {
 			return fmt.Errorf("failed to check if worktree is clean: %w", err)
 		}
@@ -109,8 +112,8 @@ func (r *Rebase) RunShell() error {
 			break
 		}
 
-		r.Logger.Error("worktree failed pre-commit checks", "msg", msg)
-		r.Logger.Warn("re-running shell...")
+		s.Logger.Error("worktree failed pre-commit checks", "msg", msg)
+		s.Logger.Warn("re-running shell...")
 	}
 
 	return nil
