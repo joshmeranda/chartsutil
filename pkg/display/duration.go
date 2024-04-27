@@ -9,10 +9,10 @@ import (
 
 // Its not important to be exact, approximations are good enough.
 const (
-	APPROXIMATE_HOURS_PER_DAY   = 24
-	APPROXIMATE_HOURS_PER_WEEK  = APPROXIMATE_HOURS_PER_DAY * 7
-	APPROXIMATE_HOURS_PER_MONTH = APPROXIMATE_HOURS_PER_DAY * 30
-	APPROXIMATE_HOURS_PER_YEAR  = APPROXIMATE_HOURS_PER_DAY * 365
+	ApproximateHoursPerDay   = 24
+	ApproximateHoursPerWeek  = ApproximateHoursPerDay * 7
+	ApproximateHoursPerMonth = ApproximateHoursPerDay * 30
+	ApproximateHoursPerYear  = ApproximateHoursPerDay * 365
 )
 
 type Duration struct {
@@ -28,12 +28,10 @@ func NewDuration(d time.Duration) Duration {
 	newD := Duration{
 		Minutes: int64(d.Minutes()) % 60,
 		Hours:   int64(d.Hours()) % 24,
-		// Days:    int64(d.Hours()) % APPROXIMATE_HOURS_PER_WEEK / APPROXIMATE_HOURS_PER_DAY,
-		Days:   int64(math.Round(float64(int64(d.Hours())%APPROXIMATE_HOURS_PER_WEEK) / float64(APPROXIMATE_HOURS_PER_DAY))),
-		Weeks:  int64(math.Round(float64(int64(d.Hours())%APPROXIMATE_HOURS_PER_MONTH) / float64(APPROXIMATE_HOURS_PER_WEEK))),
-		Months: int64(math.Round(float64(int64(d.Hours())%APPROXIMATE_HOURS_PER_YEAR) / float64(APPROXIMATE_HOURS_PER_MONTH))),
-		// Months: int64(d.Hours()) % APPROXIMATE_HOURS_PER_YEAR / APPROXIMATE_HOURS_PER_MONTH,
-		Years: int64(d.Hours()) / int64(APPROXIMATE_HOURS_PER_YEAR),
+		Days:    int64(math.Round(float64(int64(d.Hours())%ApproximateHoursPerWeek) / float64(ApproximateHoursPerDay))),
+		Weeks:   int64(math.Round(float64(int64(d.Hours())%ApproximateHoursPerMonth) / float64(ApproximateHoursPerWeek))),
+		Months:  int64(math.Round(float64(int64(d.Hours())%ApproximateHoursPerYear) / float64(ApproximateHoursPerMonth))),
+		Years:   int64(d.Hours()) / int64(ApproximateHoursPerYear),
 	}
 
 	return newD

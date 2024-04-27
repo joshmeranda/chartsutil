@@ -30,15 +30,13 @@ import (
 // todo: check for some obvious errors in rebase (unresolved conflicts, helm templating failing, etc)
 
 const (
-	// CHARTS_STAGING_BRANCH_NAME is the name of the branch used to stage changes for user interaction / review.
-	CHARTS_STAGING_BRANCH_NAME = "charts-staging"
+	// ChartrsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
+	ChartrsStagingBranchName = "charts-staging"
 
-	// CHARTS_QUARANTNE_BRANCH_NAME is the name of the "working" branch where the incoming changes are applied.
-	CHARTS_QUARANTNE_BRANCH_NAME = "quarantine"
+	// CharstQuarantineBranchName is the name of the "working" branch where the incoming changes are applied.
+	CharstQuarantineBranchName = "quarantine"
 
-	// CHARTS_UPSTREAM_BRANCH_NAME is the name of the branch that tracks the upstream repository.
-	CHARTS_UPSTREAM_BRANCH_NAME = "upstream"
-
+	// RebaseBackupDir is the directory where the charts are backed up to.
 	RebaseBackupDir = ".rebase-backup"
 )
 
@@ -106,12 +104,12 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 }
 
 func (r *Rebase) handleUpstream(p puller.Puller) error {
-	if err := CreateBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME); err != nil {
+	if err := CreateBranch(r.chartsRepo, ChartrsStagingBranchName); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
 	}
-	defer DeleteBranch(r.chartsRepo, CHARTS_STAGING_BRANCH_NAME)
+	defer DeleteBranch(r.chartsRepo, ChartrsStagingBranchName)
 
-	err := DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_STAGING_BRANCH_NAME, func(wt *git.Worktree) error {
+	err := DoOnBranch(r.chartsRepo, r.chartsWt, ChartrsStagingBranchName, func(wt *git.Worktree) error {
 		if err := p.Pull(r.RootFs, r.PkgFs, r.Package.WorkingDir); err != nil {
 			return fmt.Errorf("failed to pull upstream changes: %w", err)
 		}
@@ -127,7 +125,7 @@ func (r *Rebase) handleUpstream(p puller.Puller) error {
 	}
 
 	// need to run as subprocess since go-git Pull only supports fast-forward merges
-	cmd := exec.Command("git", "merge", "--squash", "--no-commit", CHARTS_STAGING_BRANCH_NAME)
+	cmd := exec.Command("git", "merge", "--squash", "--no-commit", ChartrsStagingBranchName)
 	cmd.Dir = r.RootFs.Root()
 
 	r.Logger.Info("merging branch", "cmd", cmd.String(), "dir", cmd.Dir)
@@ -231,15 +229,15 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("charts worktree is not clean")
 	}
 
-	if err := CreateBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME); err != nil {
+	if err := CreateBranch(r.chartsRepo, CharstQuarantineBranchName); err != nil {
 		return fmt.Errorf("failed to create quarantine branch: %w", err)
 	}
-	defer DeleteBranch(r.chartsRepo, CHARTS_QUARANTNE_BRANCH_NAME)
+	defer DeleteBranch(r.chartsRepo, CharstQuarantineBranchName)
 
 	var patchHash plumbing.Hash
 	var packageHash plumbing.Hash
 
-	err = DoOnBranch(r.chartsRepo, r.chartsWt, CHARTS_QUARANTNE_BRANCH_NAME, func(wt *git.Worktree) error {
+	err = DoOnBranch(r.chartsRepo, r.chartsWt, CharstQuarantineBranchName, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
 
 		if err := r.Package.Prepare(); err != nil {

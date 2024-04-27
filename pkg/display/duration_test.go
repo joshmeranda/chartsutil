@@ -10,10 +10,10 @@ import (
 func TestNewDuration(t *testing.T) {
 	t.Skip("precision loss is a beast, and I don't care enough to slay it yet")
 
-	duration := time.Hour*display.APPROXIMATE_HOURS_PER_YEAR*5 + // 5 years
-		time.Hour*display.APPROXIMATE_HOURS_PER_MONTH*2 + // 2 months
-		time.Hour*display.APPROXIMATE_HOURS_PER_WEEK*2 + // 2 weeks
-		time.Hour*display.APPROXIMATE_HOURS_PER_DAY*3 + // 3 days
+	duration := time.Hour*display.ApproximateHoursPerYear*5 + // 5 years
+		time.Hour*display.ApproximateHoursPerMonth*2 + // 2 months
+		time.Hour*display.ApproximateHoursPerWeek*2 + // 2 weeks
+		time.Hour*display.ApproximateHoursPerDay*3 + // 3 days
 		time.Hour*13 + // 13 Hours
 		time.Minute*7 // 7 minutes
 
