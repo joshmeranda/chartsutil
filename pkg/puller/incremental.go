@@ -31,6 +31,7 @@ func ForEach(iter PullerIter, fn ForEachFunc) error {
 }
 
 type PullerIter interface {
+	// Next returns the next puller in the iterator and points the head at the next item. If empty returns io.EOF.
 	Next() (puller.Puller, error)
 }
 

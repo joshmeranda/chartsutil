@@ -11,7 +11,6 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
-	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 	"github.com/rancher/charts-build-scripts/pkg/path"
 )
 
@@ -49,11 +48,7 @@ func (s *Shell) checkWorktree(wt *git.Worktree) (string, error) {
 		return "", fmt.Errorf("failed to get worktree status: %w", err)
 	}
 
-	pkgDir, err := filesystem.GetRelativePath(wt.Filesystem, filepath.Join(path.RepositoryPackagesDir, s.Package.Name))
-	if err != nil {
-		return "", fmt.Errorf("failed to get path to package dir")
-	}
-
+	pkgDir := filepath.Join(path.RepositoryPackagesDir, s.Package.Name)
 	generatedChangesDir := filepath.Join(pkgDir, path.GeneratedChangesDir)
 	chartsDir := filepath.Join(pkgDir, s.Package.WorkingDir)
 
@@ -91,6 +86,7 @@ func (s *Shell) Resolve(wt *git.Worktree) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
+		// todo: be more intelligent about handling these errors (binray not found, don't care about exit code, etc)
 		if err := cmd.Run(); err != nil {
 			return err
 		}
