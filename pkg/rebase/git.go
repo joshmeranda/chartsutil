@@ -18,8 +18,6 @@ var (
 	}
 )
 
-// todo: figure out why branching (create and delete) with go-git is not working
-
 // GetLocalBranchRefName returns the reference name of a given local branch
 func GetLocalBranchRefName(branch string) plumbing.ReferenceName {
 	return plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch))

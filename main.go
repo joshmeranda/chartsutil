@@ -65,7 +65,6 @@ func pkgRebase(ctx *cli.Context) error {
 			return fmt.Errorf("failed to create puller iterator: %w", err)
 		}
 	} else {
-		// todo: set this to something else
 		iter, err = utilpuller.NewSingleIter(pkg.Chart.Upstream, rebaseTarget)
 		if err != nil {
 			return fmt.Errorf("failed to create single puller: %w", err)

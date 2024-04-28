@@ -28,7 +28,6 @@ To abort the rebase at any time run 'abort'!`
 )
 
 func getShellRcContents() []byte {
-	// todo: maybe add commit to prompt
 	return []byte(fmt.Sprintf(`PS1="(interactive-rebase-shell)> "; alias abort='touch %s && exit'; echo '%s'`, AbortFileName, ShellWelcomeMessage))
 }
 

@@ -9,8 +9,6 @@ import (
 	"github.com/rancher/charts-build-scripts/pkg/puller"
 )
 
-// todo: rebase is not set up to update package upstream URLs
-
 type ForEachFunc func(p puller.Puller) error
 
 func ForEach(iter PullerIter, fn ForEachFunc) error {

@@ -1,6 +1,11 @@
 package rebase
 
-import "github.com/rancher/charts-build-scripts/pkg/puller"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/rancher/charts-build-scripts/pkg/puller"
+)
 
 func ToPtr[T any](t T) *T {
 	return &t
@@ -23,6 +28,21 @@ func GetRelaventUpstreamChange(upstream puller.Puller) string {
 
 		return opts.URL
 	}
+}
+
+func GetUpdateExpression(upstream puller.Puller) string {
+	opts := upstream.GetOptions()
+	updates := make([]string, 0, 3)
+
+	switch upstream.(type) {
+
+	case puller.GithubRepository:
+		updates = append(updates, fmt.Sprintf(".commit=\"%s\"", *opts.Commit))
+	default:
+		updates = append(updates, fmt.Sprintf(".url=\"%s\"", opts.URL))
+	}
+
+	return strings.Join(updates, " | ")
 }
 
 func Exists(path string) {

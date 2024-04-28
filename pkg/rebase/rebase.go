@@ -15,19 +15,26 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
+	"github.com/mikefarah/yq/v4/pkg/yqlib"
 	cp "github.com/otiai10/copy"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
-	"github.com/rancher/charts-build-scripts/pkg/filesystem"
-	"github.com/rancher/charts-build-scripts/pkg/options"
 	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
 	"github.com/rancher/charts-build-scripts/pkg/puller"
-	"gopkg.in/yaml.v3"
+	"gopkg.in/op/go-logging.v1"
 )
 
-// todo: might be a good idea to add some prefix to thesae branch names
-// todo: use yq rather than yaml for better formatting
-// todo: create an example rancher-charts to w0ork with for testing
-// todo: check for some obvious errors in rebase (unresolved conflicts, helm templating failing, etc)
+func init() {
+	// silence yq logging using module name found here: https://github.com/mikefarah/yq/blob/master/pkg/yqlib/lib.go#L22
+	level, err := logging.LogLevel(logging.CRITICAL.String())
+	if err != nil {
+		panic("bug: failed to silence yq logger: " + err.Error())
+	}
+	logging.SetLevel(level, "yq-lib")
+}
+
+// todo: MUST create an example rancher-charts to work with for testing
+// todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
+// todo: SHOULD check for some obvious errors in rebase (unresolved conflicts, helm templating failing, package can be prepared, etc)
 
 const (
 	// ChartrsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
@@ -57,8 +64,6 @@ type Rebase struct {
 	chartsRepo *git.Repository
 	chartsWt   *git.Worktree
 }
-
-// todo: add util function for getting relavant info from an upstream (commit for git, / url for everything else)
 
 func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter utilpuller.PullerIter, opts Options) (*Rebase, error) {
 	if pkg.Chart.Upstream.GetOptions().Commit == nil {
@@ -184,34 +189,35 @@ func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
 	return hash, nil
 }
 
-func (r *Rebase) updatePackageYaml(newOpts options.UpstreamOptions) (plumbing.Hash, error) {
+func (r *Rebase) updatePackageYaml(upstream puller.Puller) (plumbing.Hash, error) {
 	pkgFile := filepath.Join(r.PkgFs.Root(), chartspath.PackageOptionsFile)
-	relativePackagePath, err := filesystem.GetRelativePath(r.RootFs, pkgFile)
+	relativePkgPath := filepath.Join(chartspath.RepositoryPackagesDir, r.Package.Name)
+
+	inPlaceHandler := yqlib.NewWriteInPlaceHandler(pkgFile)
+	out, err := inPlaceHandler.CreateTempFile()
 	if err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to get relative path to package.yaml: %w", err)
+		return plumbing.ZeroHash, fmt.Errorf("failed to create temporary file: %w", err)
 	}
 
-	data, err := os.ReadFile(pkgFile)
-	if err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to read package options: %w", err)
+	decoder := yqlib.YamlFormat.DecoderFactory()
+	encoder := yqlib.YamlFormat.EncoderFactory()
+	printerWriter := yqlib.NewSinglePrinterWriter(out)
+	printer := yqlib.NewPrinter(encoder, printerWriter)
+
+	expression := GetUpdateExpression(upstream)
+
+	r.Logger.Debug("updating package.yaml", "expr", expression)
+
+	allAtOnceEvaluator := yqlib.NewAllAtOnceEvaluator()
+	if err := allAtOnceEvaluator.EvaluateFiles(expression, []string{pkgFile}, printer, decoder); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("failed to update package.yaml: %w", err)
 	}
 
-	pkgOpts := options.PackageOptions{}
-	if err := yaml.Unmarshal(data, &pkgOpts); err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to unmarshal package options: %w", err)
+	if err := inPlaceHandler.FinishWriteInPlace(true); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("failed to complete in-place update: %w", err)
 	}
 
-	pkgOpts.MainChartOptions.UpstreamOptions = newOpts
-
-	if data, err = yaml.Marshal(pkgOpts); err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed marshalling updated package options: %w", err)
-	}
-
-	if err := os.WriteFile(pkgFile, data, 0644); err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to write new package options: %w", err)
-	}
-
-	hash, err := Commit(r.chartsWt, "updating package.yaml for", relativePackagePath)
+	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", relativePkgPath, GetRelaventUpstreamChange(upstream)), relativePkgPath)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit package.yaml changes: %w", err)
 	}
@@ -241,7 +247,7 @@ func (r *Rebase) Rebase() error {
 		r.Logger.Info("preparing package")
 
 		if err := r.Package.Prepare(); err != nil {
-			return fmt.Errorf("failed to prepare the chart")
+			return fmt.Errorf("failed to prepare the chart: %w", err)
 		}
 
 		if _, err := r.commitCharts("preparing package"); err != nil {
@@ -283,7 +289,7 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to generate patch: %w", err)
 		}
 
-		if packageHash, err = r.updatePackageYaml(last.GetOptions()); err != nil {
+		if packageHash, err = r.updatePackageYaml(last); err != nil {
 			return fmt.Errorf("failed to update package.yaml: %w", err)
 		}
 
