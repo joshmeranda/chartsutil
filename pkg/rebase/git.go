@@ -6,16 +6,6 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-)
-
-var (
-	// todo: we should load these to be the actual values if possible
-	commitOpts = git.CommitOptions{
-		Author: &object.Signature{
-			Name: "REBASE_BOT",
-		},
-	}
 )
 
 // GetLocalBranchRefName returns the reference name of a given local branch
@@ -137,7 +127,7 @@ func Commit(wt *git.Worktree, message string, paths ...string) (plumbing.Hash, e
 		message = fmt.Sprintf("made changes to %s", strings.Join(paths, ", "))
 	}
 
-	hash, err := wt.Commit(message, &commitOpts)
+	hash, err := wt.Commit(message, &git.CommitOptions{})
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit changes: %w", err)
 	}
