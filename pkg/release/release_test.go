@@ -1,9 +1,11 @@
 package release_test
 
 import (
+	"context"
 	"regexp"
 	"testing"
 
+	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/release"
 )
 
@@ -43,6 +45,47 @@ func TestTagPattern(t *testing.T) {
 		actual := pattern.MatchString(c.Tag)
 		if actual != c.Expectmatch {
 			t.Errorf("expected %t but got %t for tag %s", c.Expectmatch, actual, c.Tag)
+		}
+	}
+}
+
+func TestReleasesForUpstream(t *testing.T) {
+	ref := chartsutil.RepoRef{
+		Owner: "joshmeranda",
+		Name:  "chartsutil-example-upstream",
+	}
+
+	query := release.ReleaseQuery{
+		// Since:       time.Time{},
+		NamePattern: regexp.MustCompile(release.DefaultReleaseNamePattern),
+	}
+
+	actual, err := release.ReleasesForUpstream(context.Background(), ref, query)
+	if err != nil {
+		t.Fatalf("failed to fetch releases: %v", err)
+	}
+
+	expected := []release.Release{
+		{
+			Name: "v0.0.1",
+			Hash: "main",
+		},
+		{
+			Name: "v0.0.0",
+			Hash: "main",
+		},
+	}
+
+	if len(actual) != len(expected) {
+		t.Fatalf("expected %d releases but got %d", len(expected), len(actual))
+	}
+
+	for i := 0; i < len(actual); i++ {
+		if actual[i].Name != expected[i].Name {
+			t.Errorf("expected release name %s but got %s", expected[i].Name, actual[i].Name)
+		}
+		if actual[i].Hash != expected[i].Hash {
+			t.Errorf("expected release hash %s but got %s", expected[i].Hash, actual[i].Hash)
 		}
 	}
 }
