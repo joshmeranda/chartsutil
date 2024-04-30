@@ -1,0 +1,134 @@
+package rebase_test
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-git/v5"
+	cp "github.com/otiai10/copy"
+	"github.com/rancher/charts-build-scripts/pkg/charts"
+	"github.com/rancher/charts-build-scripts/pkg/filesystem"
+	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
+)
+
+const (
+	RebaseExampleUrl = "https://github.com/joshmeranda/chartsutil-example"
+
+	RebaseExampleUpstreamUrl = "https://github.com/joshmeranda/chartsutil-example-upstream"
+
+	CacheDir = ".test-cache"
+
+	PkgName = "rebase-example"
+)
+
+var logger *slog.Logger
+
+func init() {
+	if err := os.MkdirAll(CacheDir, 0755); err != nil {
+		panic(fmt.Sprintf("failed to create cache dir: %v", err))
+	}
+
+	logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+}
+
+func cloneChartsTo(path string) (*git.Repository, error) {
+	cloneDir := filepath.Join(CacheDir, "chartsutil-example")
+
+	if _, err := os.Stat(cloneDir); errors.Is(err, os.ErrNotExist) {
+
+		cloneOpts := &git.CloneOptions{
+			URL: RebaseExampleUrl,
+		}
+
+		if _, err := git.PlainClone(cloneDir, false, cloneOpts); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := cp.Copy(cloneDir, path); err != nil {
+		return nil, fmt.Errorf("failed to copy charts dir")
+	}
+
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open git repo: %v", err)
+	}
+
+	return repo, nil
+}
+
+func setupRebase(t *testing.T) (string, *slog.Logger, *git.Repository, *charts.Package, billy.Filesystem, billy.Filesystem) {
+	chartsDir := fmt.Sprintf("%s-charts", t.Name())
+	t.Cleanup(func() {
+		if err := os.RemoveAll(chartsDir); err != nil {
+			t.Fatalf("failed to remove temp dir: %v", err)
+		}
+	})
+
+	repo, err := cloneChartsTo(chartsDir)
+	if err != nil {
+		t.Fatalf("failed to clone charts: %v", err)
+	}
+
+	rootFs := filesystem.GetFilesystem(chartsDir)
+	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, PkgName))
+	if err != nil {
+		t.Fatalf("failed to chroot to package dir: %v", err)
+	}
+
+	pkg, err := charts.GetPackage(rootFs, PkgName)
+	if err != nil {
+		t.Fatalf("failed to get package: %v", err)
+	}
+
+	return chartsDir, logger.WithGroup(t.Name()), repo, pkg, rootFs, pkgFs
+}
+
+func assertPackageMessage(t *testing.T, repo *git.Repository, message string) {
+	t.Helper()
+
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatalf("failed to get HEAD: %v", err)
+	}
+
+	commit, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		t.Fatalf("failed to get commit: %v", err)
+	}
+
+	if commit.Message != message {
+		t.Errorf("commit message does not match expected value:\nExpected: '%s'\n   Found: '%s'", message, commit.Message)
+	}
+}
+
+func assertRebaseMessage(t *testing.T, repo *git.Repository, message string) {
+	t.Helper()
+
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatalf("failed to get HEAD: %v", err)
+	}
+
+	commit, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		t.Fatalf("failed to get commit: %v", err)
+	}
+
+	parent := commit.ParentHashes[0]
+
+	commit, err = repo.CommitObject(parent)
+	if err != nil {
+		t.Fatalf("failed to get commit: %v", err)
+	}
+
+	if commit.Message != message {
+		t.Errorf("commit message does not match expected value:\nExpected: '%s'\n   Found: '%s'", message, commit.Message)
+	}
+}

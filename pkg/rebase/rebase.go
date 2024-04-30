@@ -32,16 +32,16 @@ func init() {
 	logging.SetLevel(level, "yq-lib")
 }
 
-// todo: MUST create an example rancher-charts to work with for testing
+// todo: if nothing to do afterresolving merge conflicts, don't write a commit
 // todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
 // todo: SHOULD check for some obvious errors in rebase (unresolved conflicts, helm templating failing, package can be prepared, etc)
 
 const (
-	// ChartrsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
-	ChartrsStagingBranchName = "charts-staging"
+	// ChartsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
+	ChartsStagingBranchName = "charts-staging"
 
-	// CharstQuarantineBranchName is the name of the "working" branch where the incoming changes are applied.
-	CharstQuarantineBranchName = "quarantine"
+	// ChartsQuarantineBranchName is the name of the "working" branch where the incoming changes are applied.
+	ChartsQuarantineBranchName = "quarantine"
 
 	// RebaseBackupDir is the directory where the charts are backed up to.
 	RebaseBackupDir = ".rebase-backup"
@@ -109,12 +109,12 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 }
 
 func (r *Rebase) handleUpstream(p puller.Puller) error {
-	if err := CreateBranch(r.chartsRepo, ChartrsStagingBranchName); err != nil {
+	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
 	}
-	defer DeleteBranch(r.chartsRepo, ChartrsStagingBranchName)
+	defer DeleteBranch(r.chartsRepo, ChartsStagingBranchName)
 
-	err := DoOnBranch(r.chartsRepo, r.chartsWt, ChartrsStagingBranchName, func(wt *git.Worktree) error {
+	err := DoOnBranch(r.chartsRepo, r.chartsWt, ChartsStagingBranchName, func(wt *git.Worktree) error {
 		if err := p.Pull(r.RootFs, r.PkgFs, r.Package.WorkingDir); err != nil {
 			return fmt.Errorf("failed to pull upstream changes: %w", err)
 		}
@@ -130,7 +130,7 @@ func (r *Rebase) handleUpstream(p puller.Puller) error {
 	}
 
 	// need to run as subprocess since go-git Pull only supports fast-forward merges
-	cmd := exec.Command("git", "merge", "--squash", "--no-commit", ChartrsStagingBranchName)
+	cmd := exec.Command("git", "merge", "--squash", "--no-commit", ChartsStagingBranchName)
 	cmd.Dir = r.RootFs.Root()
 
 	r.Logger.Info("merging branch", "cmd", cmd.String(), "dir", cmd.Dir)
@@ -235,15 +235,15 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("charts worktree is not clean")
 	}
 
-	if err := CreateBranch(r.chartsRepo, CharstQuarantineBranchName); err != nil {
+	if err := CreateBranch(r.chartsRepo, ChartsQuarantineBranchName); err != nil {
 		return fmt.Errorf("failed to create quarantine branch: %w", err)
 	}
-	defer DeleteBranch(r.chartsRepo, CharstQuarantineBranchName)
+	defer DeleteBranch(r.chartsRepo, ChartsQuarantineBranchName)
 
 	var patchHash plumbing.Hash
 	var packageHash plumbing.Hash
 
-	err = DoOnBranch(r.chartsRepo, r.chartsWt, CharstQuarantineBranchName, func(wt *git.Worktree) error {
+	err = DoOnBranch(r.chartsRepo, r.chartsWt, ChartsQuarantineBranchName, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
 
 		if err := r.Package.Prepare(); err != nil {

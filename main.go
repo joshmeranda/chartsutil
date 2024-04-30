@@ -17,6 +17,7 @@ import (
 	"github.com/joshmeranda/chartsutil/pkg/release"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
+	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
 	"github.com/urfave/cli/v2"
 )
 
@@ -41,7 +42,7 @@ func pkgRebase(ctx *cli.Context) error {
 	rebaseTarget := ctx.Args().First()
 
 	rootFs := filesystem.GetFilesystem(chartsDir)
-	pkgFs, err := rootFs.Chroot(filepath.Join("packages", pkgName))
+	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
 	if err != nil {
 		return fmt.Errorf("failed to chroot to package dir: %w", err)
 	}

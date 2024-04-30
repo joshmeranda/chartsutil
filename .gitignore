@@ -31,3 +31,5 @@ go.work
 
 # Program generated files and directories
 .rebase-backup
+.test-cache
+*-charts

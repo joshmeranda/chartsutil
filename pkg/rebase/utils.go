@@ -44,6 +44,3 @@ func GetUpdateExpression(upstream puller.Puller) string {
 
 	return strings.Join(updates, " | ")
 }
-
-func Exists(path string) {
-}
