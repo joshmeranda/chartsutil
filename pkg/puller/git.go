@@ -127,8 +127,8 @@ func (i *GitIter) Next() (puller.Puller, error) {
 	i.commits = i.commits[:len(i.commits)-1]
 
 	p := &CheckoutPuller{
-		wt: i.repoWt,
-		opts: options.UpstreamOptions{
+		Wt: i.repoWt,
+		Opts: options.UpstreamOptions{
 			URL:          i.UpstreamOptions.URL,
 			Subdirectory: i.UpstreamOptions.Subdirectory,
 			Commit:       &commitStr,
@@ -147,8 +147,8 @@ func shouldSkip(srcinfo os.FileInfo, src, dest string) (bool, error) {
 }
 
 type CheckoutPuller struct {
-	wt   *git.Worktree
-	opts options.UpstreamOptions
+	Wt   *git.Worktree
+	Opts options.UpstreamOptions
 }
 
 // Pull checks out the commit from upstream options and copies the files to the destination.
@@ -156,15 +156,15 @@ type CheckoutPuller struct {
 // Because this method mutatues the filesystem, it is not safe to call concurrently.
 func (p *CheckoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path string) error {
 	checkoutOpts := git.CheckoutOptions{
-		Hash: plumbing.NewHash(*p.opts.Commit),
+		Hash: plumbing.NewHash(*p.Opts.Commit),
 	}
-	if err := p.wt.Checkout(&checkoutOpts); err != nil {
+	if err := p.Wt.Checkout(&checkoutOpts); err != nil {
 		return fmt.Errorf("failed to checkout commit: %w", err)
 	}
 
-	src := p.wt.Filesystem.Root()
-	if p.opts.Subdirectory != nil {
-		src = filepath.Join(src, *p.opts.Subdirectory)
+	src := p.Wt.Filesystem.Root()
+	if p.Opts.Subdirectory != nil {
+		src = filepath.Join(src, *p.Opts.Subdirectory)
 	}
 
 	dst := filesystem.GetAbsPath(fs, path)
@@ -177,7 +177,7 @@ func (p *CheckoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path
 }
 
 func (p *CheckoutPuller) GetOptions() options.UpstreamOptions {
-	return p.opts
+	return p.Opts
 }
 
 func (p *CheckoutPuller) IsWithinPackage() bool {
