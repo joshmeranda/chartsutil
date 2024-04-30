@@ -3,7 +3,7 @@ package rebase_test
 import (
 	"testing"
 
-	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/options"
@@ -30,7 +30,7 @@ func TestGetRelevantUpstreamChange(t *testing.T) {
 		},
 		{
 			Name: "CheckoutPuller",
-			Upstream: &utilpuller.CheckoutPuller{
+			Upstream: &iter.CheckoutPuller{
 				Opts: options.UpstreamOptions{
 					URL:          "https://github.com/joshmeranda/chartsutil-example-upstream.git",
 					Subdirectory: nil,
@@ -87,7 +87,7 @@ func TestGetUpdateExpression(t *testing.T) {
 		},
 		{
 			Name: "CheckoutPuller",
-			Upstream: &utilpuller.CheckoutPuller{
+			Upstream: &iter.CheckoutPuller{
 				Opts: options.UpstreamOptions{
 					URL:          "https://github.com/joshmeranda/chartsutil-example-upstream.git",
 					Subdirectory: nil,

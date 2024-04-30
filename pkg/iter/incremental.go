@@ -1,4 +1,4 @@
-package puller
+package iter
 
 import (
 	"errors"
@@ -11,7 +11,7 @@ import (
 
 type ForEachFunc func(p puller.Puller) error
 
-func ForEach(iter PullerIter, fn ForEachFunc) error {
+func ForEach(iter UpstreamIter, fn ForEachFunc) error {
 	for {
 		p, err := iter.Next()
 		if errors.Is(err, io.EOF) {
@@ -28,27 +28,27 @@ func ForEach(iter PullerIter, fn ForEachFunc) error {
 	return nil
 }
 
-type PullerIter interface {
+type UpstreamIter interface {
 	// Next returns the next puller in the iterator and points the head at the next item. If empty returns io.EOF.
 	Next() (puller.Puller, error)
 }
 
 type SingleIter struct {
-	Puller puller.Puller
+	Upstream puller.Puller
 }
 
 func (i *SingleIter) Next() (puller.Puller, error) {
-	if i.Puller == nil {
-		return i.Puller, io.EOF
+	if i.Upstream == nil {
+		return i.Upstream, io.EOF
 	}
 
-	p := i.Puller
-	i.Puller = nil
+	p := i.Upstream
+	i.Upstream = nil
 
 	return p, nil
 }
 
-func IterForUpstream(upstream puller.Puller, target string) (PullerIter, error) {
+func IterForUpstream(upstream puller.Puller, target string) (UpstreamIter, error) {
 	if target == "" {
 		return nil, fmt.Errorf("target cannot be empty")
 	}
@@ -61,7 +61,7 @@ func IterForUpstream(upstream puller.Puller, target string) (PullerIter, error) 
 	}
 }
 
-func NewSingleIter(upstream puller.Puller, target string) (PullerIter, error) {
+func NewSingleIter(upstream puller.Puller, target string) (UpstreamIter, error) {
 	opts := upstream.GetOptions()
 
 	switch upstream.(type) {
@@ -77,6 +77,6 @@ func NewSingleIter(upstream puller.Puller, target string) (PullerIter, error) {
 	}
 
 	return &SingleIter{
-		Puller: p,
+		Upstream: p,
 	}, nil
 }

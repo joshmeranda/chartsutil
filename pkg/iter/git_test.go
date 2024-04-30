@@ -1,14 +1,14 @@
-package puller_test
+package iter_test
 
 import (
 	"testing"
 
-	"github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/rancher/charts-build-scripts/pkg/options"
 )
 
-func assertNextCommit(t *testing.T, iter *puller.GitIter, expected string) {
+func assertNextCommit(t *testing.T, iter *iter.GitIter, expected string) {
 	t.Helper()
 
 	upstream, err := iter.Next()
@@ -27,7 +27,7 @@ func TestNewGitIter(t *testing.T) {
 		Commit: rebase.ToPtr("d71e29b3f50fbe2ff4d3c2dd95684739b4d00310"),
 	}
 
-	iter, err := puller.NewGitIter(opts, "933d8b2975efa50cda4dca6234e5e522b8f58cdc")
+	iter, err := iter.NewGitIter(opts, "933d8b2975efa50cda4dca6234e5e522b8f58cdc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

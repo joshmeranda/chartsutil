@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/joshmeranda/chartsutil/pkg/display"
-	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/joshmeranda/chartsutil/pkg/release"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
@@ -57,15 +57,15 @@ func pkgRebase(ctx *cli.Context) error {
 		return err
 	}
 
-	var iter utilpuller.PullerIter
+	var upstreamIter iter.UpstreamIter
 
 	if incremental {
-		iter, err = utilpuller.IterForUpstream(pkg.Chart.Upstream, rebaseTarget)
+		upstreamIter, err = iter.IterForUpstream(pkg.Chart.Upstream, rebaseTarget)
 		if err != nil {
 			return fmt.Errorf("failed to create puller iterator: %w", err)
 		}
 	} else {
-		iter, err = utilpuller.NewSingleIter(pkg.Chart.Upstream, rebaseTarget)
+		upstreamIter, err = iter.NewSingleIter(pkg.Chart.Upstream, rebaseTarget)
 		if err != nil {
 			return fmt.Errorf("failed to create single puller: %w", err)
 		}
@@ -76,7 +76,7 @@ func pkgRebase(ctx *cli.Context) error {
 		EnableBackup: backup,
 	}
 
-	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)
+	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, upstreamIter, opts)
 	if err != nil {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}

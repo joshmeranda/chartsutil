@@ -13,7 +13,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
 	"github.com/mikefarah/yq/v4/pkg/yqlib"
 	cp "github.com/otiai10/copy"
@@ -59,13 +59,13 @@ type Rebase struct {
 	Package *charts.Package
 	RootFs  billy.Filesystem
 	PkgFs   billy.Filesystem
-	Iter    utilpuller.PullerIter
+	Iter    iter.UpstreamIter
 
 	chartsRepo *git.Repository
 	chartsWt   *git.Worktree
 }
 
-func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter utilpuller.PullerIter, opts Options) (*Rebase, error) {
+func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter iter.UpstreamIter, opts Options) (*Rebase, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	}
@@ -254,7 +254,7 @@ func (r *Rebase) Rebase() error {
 
 		var last puller.Puller
 
-		err := utilpuller.ForEach(r.Iter, func(p puller.Puller) error {
+		err := iter.ForEach(r.Iter, func(p puller.Puller) error {
 			if r.EnableBackup {
 				defer func() {
 					r.Logger.Info("backing up current state of charts")

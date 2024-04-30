@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
-	"github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
 	cp "github.com/otiai10/copy"
@@ -145,7 +145,7 @@ func TestArchive(t *testing.T) {
 
 	target := "https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz"
 
-	iter, err := puller.NewSingleIter(pkg.Chart.Upstream, target)
+	iter, err := iter.NewSingleIter(pkg.Chart.Upstream, target)
 	if err != nil {
 		t.Fatalf("failed to create single iterator: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestGitIncremental(t *testing.T) {
 
 	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
 
-	iter, err := puller.NewGitIter(pkg.Chart.Upstream.GetOptions(), target)
+	iter, err := iter.NewGitIter(pkg.Chart.Upstream.GetOptions(), target)
 	if err != nil {
 		t.Fatalf("failed to create git iterator: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestGitNonIncremental(t *testing.T) {
 
 	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
 
-	iter, err := puller.NewSingleIter(pkg.Chart.Upstream, target)
+	iter, err := iter.NewSingleIter(pkg.Chart.Upstream, target)
 	if err != nil {
 		t.Fatalf("failed to create single iterator: %v", err)
 	}

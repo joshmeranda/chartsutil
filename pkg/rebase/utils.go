@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
+	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/rancher/charts-build-scripts/pkg/puller"
 )
 
@@ -16,7 +16,7 @@ func GetRelaventUpstreamChange(upstream puller.Puller) string {
 	opts := upstream.GetOptions()
 
 	switch upstream.(type) {
-	case puller.GithubRepository, *utilpuller.CheckoutPuller:
+	case puller.GithubRepository, *iter.CheckoutPuller:
 		if opts.Commit == nil {
 			panic("bug: found nil commit on github repository")
 		}
@@ -37,7 +37,7 @@ func GetUpdateExpression(upstream puller.Puller) string {
 
 	switch upstream.(type) {
 
-	case puller.GithubRepository, *utilpuller.CheckoutPuller:
+	case puller.GithubRepository, *iter.CheckoutPuller:
 		updates = append(updates, fmt.Sprintf(".commit=\"%s\"", *opts.Commit))
 	default:
 		updates = append(updates, fmt.Sprintf(".url=\"%s\"", opts.URL))

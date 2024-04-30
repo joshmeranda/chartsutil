@@ -1,4 +1,4 @@
-package puller
+package iter
 
 import (
 	"fmt"
