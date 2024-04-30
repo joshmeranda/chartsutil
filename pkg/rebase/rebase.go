@@ -32,7 +32,6 @@ func init() {
 	logging.SetLevel(level, "yq-lib")
 }
 
-// todo: if nothing to do afterresolving merge conflicts, don't write a commit
 // todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
 // todo: SHOULD check for some obvious errors in rebase (unresolved conflicts, helm templating failing, package can be prepared, etc)
 

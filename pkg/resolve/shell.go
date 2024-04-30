@@ -85,10 +85,8 @@ func (s *Shell) Resolve(wt *git.Worktree) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
-		// todo: be more intelligent about handling these errors (binray not found, don't care about exit code, etc)
 		err := cmd.Run()
 		_, isExitErr := err.(*exec.ExitError)
-
 		if err != nil && !isExitErr {
 			return err
 		}
