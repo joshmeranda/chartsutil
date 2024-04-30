@@ -1,7 +1,6 @@
 package puller
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +23,8 @@ type GitIter struct {
 
 	fromCommit plumbing.Hash
 	toCommit   plumbing.Hash
-	commitIter object.CommitIter
+
+	commits []*object.Commit
 
 	repo   *git.Repository
 	repoWt *git.Worktree
@@ -98,10 +98,16 @@ func (i *GitIter) init() error {
 		Since: &since,
 	}
 
-	if i.commitIter, err = i.repo.Log(&logOpts); err != nil {
+	commitIter, err := i.repo.Log(&logOpts)
+	if err != nil {
 		return fmt.Errorf("failed to get commit iterator: %w", err)
 	}
 
+	i.commits = make([]*object.Commit, 0)
+	commitIter.ForEach(func(c *object.Commit) error {
+		i.commits = append(i.commits, c)
+		return nil
+	})
 	i.isInit = true
 	return nil
 }
@@ -113,16 +119,14 @@ func (i *GitIter) Next() (puller.Puller, error) {
 		}
 	}
 
-	commit, err := i.commitIter.Next()
-	if errors.Is(err, io.EOF) {
-		return nil, err
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get next commit: %w", err)
+	if len(i.commits) == 0 {
+		return nil, io.EOF
 	}
 
-	commitStr := commit.Hash.String()
+	commitStr := i.commits[len(i.commits)-1].Hash.String()
+	i.commits = i.commits[:len(i.commits)-1]
 
-	p := &checkoutPuller{
+	p := &CheckoutPuller{
 		wt: i.repoWt,
 		opts: options.UpstreamOptions{
 			URL:          i.UpstreamOptions.URL,
@@ -142,7 +146,7 @@ func shouldSkip(srcinfo os.FileInfo, src, dest string) (bool, error) {
 	return false, nil
 }
 
-type checkoutPuller struct {
+type CheckoutPuller struct {
 	wt   *git.Worktree
 	opts options.UpstreamOptions
 }
@@ -150,7 +154,7 @@ type checkoutPuller struct {
 // Pull checks out the commit from upstream options and copies the files to the destination.
 //
 // Because this method mutatues the filesystem, it is not safe to call concurrently.
-func (p *checkoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path string) error {
+func (p *CheckoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path string) error {
 	checkoutOpts := git.CheckoutOptions{
 		Hash: plumbing.NewHash(*p.opts.Commit),
 	}
@@ -172,10 +176,10 @@ func (p *checkoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path
 	return nil
 }
 
-func (p *checkoutPuller) GetOptions() options.UpstreamOptions {
+func (p *CheckoutPuller) GetOptions() options.UpstreamOptions {
 	return p.opts
 }
 
-func (p *checkoutPuller) IsWithinPackage() bool {
+func (p *CheckoutPuller) IsWithinPackage() bool {
 	return false
 }

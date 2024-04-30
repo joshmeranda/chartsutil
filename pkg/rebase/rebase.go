@@ -66,10 +66,6 @@ type Rebase struct {
 }
 
 func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter utilpuller.PullerIter, opts Options) (*Rebase, error) {
-	if pkg.Chart.Upstream.GetOptions().Commit == nil {
-		return nil, fmt.Errorf("upstream commit is required")
-	}
-
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	}
@@ -108,14 +104,16 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 	return Commit(r.chartsWt, msg, path.Join("packages", r.Package.Name))
 }
 
-func (r *Rebase) handleUpstream(p puller.Puller) error {
+func (r *Rebase) handleUpstream(upstream puller.Puller) error {
+	r.Logger.Info(fmt.Sprintf("bringing charts to %s", GetRelaventUpstreamChange(upstream)))
+
 	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, ChartsStagingBranchName)
 
 	err := DoOnBranch(r.chartsRepo, r.chartsWt, ChartsStagingBranchName, func(wt *git.Worktree) error {
-		if err := p.Pull(r.RootFs, r.PkgFs, r.Package.WorkingDir); err != nil {
+		if err := upstream.Pull(r.RootFs, r.PkgFs, r.Package.WorkingDir); err != nil {
 			return fmt.Errorf("failed to pull upstream changes: %w", err)
 		}
 
@@ -157,11 +155,11 @@ func (r *Rebase) handleUpstream(p puller.Puller) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("received error from shell: %w", err)
+			return fmt.Errorf("received error from resolver: %w", err)
 		}
 	}
 
-	if _, err := r.commitCharts(fmt.Sprintf("brining charts to %s", GetRelaventUpstreamChange(p))); err != nil {
+	if _, err := r.commitCharts(fmt.Sprintf("bringing charts to %s", GetRelaventUpstreamChange(upstream))); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
@@ -217,7 +215,7 @@ func (r *Rebase) updatePackageYaml(upstream puller.Puller) (plumbing.Hash, error
 		return plumbing.ZeroHash, fmt.Errorf("failed to complete in-place update: %w", err)
 	}
 
-	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", relativePkgPath, GetRelaventUpstreamChange(upstream)), relativePkgPath)
+	hash, err := Commit(r.chartsWt, "Update package.yaml", relativePkgPath)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit package.yaml changes: %w", err)
 	}
@@ -303,7 +301,9 @@ func (r *Rebase) Rebase() error {
 	r.Logger.Info("letting git catch up...")
 	time.Sleep(time.Second * 2)
 
-	cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
+	// cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
+	// cmd := exec.Command("git", "cherry-pick", "--ff", patchHash.String(), packageHash.String())
+	cmd := exec.Command("git", "cherry-pick", "--allow-empty", patchHash.String(), packageHash.String())
 	cmd.Dir = r.PkgFs.Root()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

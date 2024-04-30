@@ -26,8 +26,19 @@ func (a Aborter) Resolve(*git.Worktree) error {
 type Blind struct{}
 
 func (b Blind) Resolve(wt *git.Worktree) error {
-	if _, err := wt.Add("."); err != nil {
-		return fmt.Errorf("failed to stage changed files: %w", err)
+	status, err := wt.Status()
+	if err != nil {
+		return fmt.Errorf("failed to get status: %w", err)
+	}
+
+	for file, info := range status {
+		if info.Worktree == git.Untracked || info.Worktree == git.Unmodified {
+			continue
+		}
+
+		if _, err := wt.Add(file); err != nil {
+			return fmt.Errorf("failed to stage file %s: %w", file, err)
+		}
 	}
 
 	return nil

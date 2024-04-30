@@ -10,7 +10,7 @@ import (
 )
 
 func TestGitIncremental(t *testing.T) {
-	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t)
+	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "rebase-example")
 	_ = chartsDir
 
 	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
@@ -35,14 +35,14 @@ func TestGitIncremental(t *testing.T) {
 	}
 
 	assertPackageMessage(t, repo, "Update package.yaml")
-	assertRebaseMessage(t, repo, "Update base of rebase-example to 933d8b2975efa50cda4dca6234e5e522b8f58cdc")
+	assertRebaseMessage(t, repo, "Updating rebase-example to new base 933d8b2975efa50cda4dca6234e5e522b8f58cdc")
 
 	pkg, err = charts.GetPackage(rootFs, pkg.Name)
 	if err != nil {
 		t.Fatalf("failed to get package: %v", err)
 	}
 
-	if *pkg.Chart.Upstream.GetOptions().Commit == target {
-		t.Errorf("commit does not match expected value, found '%s'", *pkg.Chart.Upstream.GetOptions().Commit)
+	if *pkg.Chart.Upstream.GetOptions().Commit != target {
+		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", target, *pkg.Chart.Upstream.GetOptions().Commit)
 	}
 }

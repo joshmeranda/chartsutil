@@ -3,7 +3,6 @@ package rebase_test
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -23,8 +22,6 @@ const (
 	RebaseExampleUpstreamUrl = "https://github.com/joshmeranda/chartsutil-example-upstream"
 
 	CacheDir = ".test-cache"
-
-	PkgName = "rebase-example"
 )
 
 var logger *slog.Logger
@@ -34,7 +31,8 @@ func init() {
 		panic(fmt.Sprintf("failed to create cache dir: %v", err))
 	}
 
-	logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	// logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
 }
 
 func cloneChartsTo(path string) (*git.Repository, error) {
@@ -63,7 +61,7 @@ func cloneChartsTo(path string) (*git.Repository, error) {
 	return repo, nil
 }
 
-func setupRebase(t *testing.T) (string, *slog.Logger, *git.Repository, *charts.Package, billy.Filesystem, billy.Filesystem) {
+func setupRebase(t *testing.T, pkgName string) (string, *slog.Logger, *git.Repository, *charts.Package, billy.Filesystem, billy.Filesystem) {
 	chartsDir := fmt.Sprintf("%s-charts", t.Name())
 	t.Cleanup(func() {
 		if err := os.RemoveAll(chartsDir); err != nil {
@@ -77,12 +75,12 @@ func setupRebase(t *testing.T) (string, *slog.Logger, *git.Repository, *charts.P
 	}
 
 	rootFs := filesystem.GetFilesystem(chartsDir)
-	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, PkgName))
+	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
 	if err != nil {
 		t.Fatalf("failed to chroot to package dir: %v", err)
 	}
 
-	pkg, err := charts.GetPackage(rootFs, PkgName)
+	pkg, err := charts.GetPackage(rootFs, pkgName)
 	if err != nil {
 		t.Fatalf("failed to get package: %v", err)
 	}
