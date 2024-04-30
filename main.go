@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
-	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/display"
 	utilpuller "github.com/joshmeranda/chartsutil/pkg/puller"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
@@ -124,7 +123,7 @@ func rebaseCheck(ctx *cli.Context) error {
 		return fmt.Errorf("upstream URL '%s' is not a git repository", pullOpts.URL)
 	}
 
-	ref, err := chartsutil.RepoRefFromUrl(pullOpts.URL)
+	ref, err := release.RepoRefFromUrl(pullOpts.URL)
 	if err != nil {
 		return fmt.Errorf("failed to get upstream owner and name from url: %w", err)
 	}

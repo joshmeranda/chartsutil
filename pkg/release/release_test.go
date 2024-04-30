@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"testing"
 
-	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 	"github.com/joshmeranda/chartsutil/pkg/release"
 )
 
@@ -50,7 +49,7 @@ func TestTagPattern(t *testing.T) {
 }
 
 func TestReleasesForUpstream(t *testing.T) {
-	ref := chartsutil.RepoRef{
+	ref := release.RepoRef{
 		Owner: "joshmeranda",
 		Name:  "chartsutil-example-upstream",
 	}

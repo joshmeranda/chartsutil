@@ -1,9 +1,9 @@
-package chartsutil_test
+package release_test
 
 import (
 	"testing"
 
-	chartsutil "github.com/joshmeranda/chartsutil/pkg"
+	"github.com/joshmeranda/chartsutil/pkg/release"
 )
 
 func TestRoleRef(t *testing.T) {
@@ -11,7 +11,7 @@ func TestRoleRef(t *testing.T) {
 		Name string
 		In   string
 
-		ExpectedRef chartsutil.RepoRef
+		ExpectedRef release.RepoRef
 		ExpectsErr  bool
 	}
 
@@ -19,7 +19,7 @@ func TestRoleRef(t *testing.T) {
 		{
 			Name: "Normal Upstream URL",
 			In:   "https://github.com/joshmeranda/chartsutil.git",
-			ExpectedRef: chartsutil.RepoRef{
+			ExpectedRef: release.RepoRef{
 				Owner: "joshmeranda",
 				Name:  "chartsutil",
 			},
@@ -33,7 +33,7 @@ func TestRoleRef(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		actualRef, err := chartsutil.RepoRefFromUrl(c.In)
+		actualRef, err := release.RepoRefFromUrl(c.In)
 
 		if c.ExpectsErr && err == nil {
 			t.Fatalf("%s expected err but received None", c.Name)

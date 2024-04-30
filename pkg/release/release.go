@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
-	chartsutil "github.com/joshmeranda/chartsutil/pkg"
 )
 
 const (
@@ -26,7 +25,7 @@ type Release struct {
 	Hash string
 }
 
-func ReleasesForUpstream(ctx context.Context, ref chartsutil.RepoRef, query ReleaseQuery) ([]Release, error) {
+func ReleasesForUpstream(ctx context.Context, ref RepoRef, query ReleaseQuery) ([]Release, error) {
 	client := github.NewClient(nil)
 
 	matchingReleases := make([]Release, 0)

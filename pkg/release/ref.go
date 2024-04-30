@@ -1,4 +1,4 @@
-package chartsutil
+package release
 
 import (
 	"fmt"
