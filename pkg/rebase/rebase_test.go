@@ -140,7 +140,7 @@ func assertRebaseMessage(t *testing.T, repo *git.Repository, message string) {
 }
 
 func TestArchive(t *testing.T) {
-	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "rebase-example-archive")
+	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "chartsutil-example-archive")
 	_ = chartsDir
 
 	target := "https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz"
@@ -165,7 +165,7 @@ func TestArchive(t *testing.T) {
 	}
 
 	assertPackageMessage(t, repo, "Update package.yaml")
-	assertRebaseMessage(t, repo, "Updating rebase-example-archive to new base https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz")
+	assertRebaseMessage(t, repo, "Updating chartsutil-example-archive to new base https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz")
 
 	pkg, err = charts.GetPackage(rootFs, pkg.Name)
 	if err != nil {
@@ -178,7 +178,7 @@ func TestArchive(t *testing.T) {
 }
 
 func TestGitIncremental(t *testing.T) {
-	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "rebase-example")
+	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "chartsutil-example")
 	_ = chartsDir
 
 	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
@@ -203,7 +203,7 @@ func TestGitIncremental(t *testing.T) {
 	}
 
 	assertPackageMessage(t, repo, "Update package.yaml")
-	assertRebaseMessage(t, repo, "Updating rebase-example to new base 933d8b2975efa50cda4dca6234e5e522b8f58cdc")
+	assertRebaseMessage(t, repo, "Updating chartsutil-example to new base 933d8b2975efa50cda4dca6234e5e522b8f58cdc")
 
 	pkg, err = charts.GetPackage(rootFs, pkg.Name)
 	if err != nil {
@@ -216,7 +216,7 @@ func TestGitIncremental(t *testing.T) {
 }
 
 func TestGitNonIncremental(t *testing.T) {
-	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "rebase-example")
+	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "chartsutil-example")
 	_ = chartsDir
 
 	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
@@ -241,7 +241,7 @@ func TestGitNonIncremental(t *testing.T) {
 	}
 
 	assertPackageMessage(t, repo, "Update package.yaml")
-	assertRebaseMessage(t, repo, "Updating rebase-example to new base 933d8b2975efa50cda4dca6234e5e522b8f58cdc")
+	assertRebaseMessage(t, repo, "Updating chartsutil-example to new base 933d8b2975efa50cda4dca6234e5e522b8f58cdc")
 
 	pkg, err = charts.GetPackage(rootFs, pkg.Name)
 	if err != nil {
