@@ -99,9 +99,17 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 	}, nil
 }
 
-// todo: check additional charts for any crds
 func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
-	return Commit(r.chartsWt, msg, path.Join(chartspath.RepositoryPackagesDir, r.Package.Name, r.Package.WorkingDir))
+	pkgDir := path.Join(chartspath.RepositoryPackagesDir, r.Package.Name)
+
+	chartPaths := make([]string, len(r.Package.AdditionalCharts)+1)
+
+	chartPaths[0] = filepath.Join(pkgDir, r.Package.WorkingDir)
+	for i, chart := range r.Package.AdditionalCharts {
+		chartPaths[i+1] = filepath.Join(pkgDir, chart.WorkingDir)
+	}
+
+	return Commit(r.chartsWt, msg, chartPaths...)
 }
 
 func (r *Rebase) handleUpstream(upstream puller.Puller) error {

@@ -48,16 +48,23 @@ func (s *Shell) checkWorktree(wt *git.Worktree) (string, error) {
 	}
 
 	pkgDir := filepath.Join(path.RepositoryPackagesDir, s.Package.Name)
-	generatedChangesDir := filepath.Join(pkgDir, path.GeneratedChangesDir)
-	chartsDir := filepath.Join(pkgDir, s.Package.WorkingDir)
+
+	allowedPaths := []string{
+		filepath.Join(pkgDir, path.GeneratedChangesDir),
+		filepath.Join(pkgDir, s.Package.WorkingDir),
+	}
 
 	for file, fs := range status {
 		if fs.Worktree != git.Unmodified {
 			return "there are unstaged changes in the worktree", nil
 		}
 
-		if !strings.HasPrefix(file, generatedChangesDir) && !strings.HasPrefix(file, chartsDir) {
-			return fmt.Sprintf("only changes to %s and %s are allowed", generatedChangesDir, chartsDir), nil
+		isFileAllowed := Any(allowedPaths, func(p string) bool {
+			return strings.HasPrefix(file, p)
+		})
+
+		if !isFileAllowed {
+			return "only changes to generated-changes or chart working dir are allowed", nil
 		}
 	}
 
