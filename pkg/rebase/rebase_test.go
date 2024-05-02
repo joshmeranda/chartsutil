@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
@@ -25,6 +26,8 @@ const (
 	RebaseExampleUpstreamUrl = "https://github.com/joshmeranda/chartsutil-example-upstream"
 
 	CacheDir = ".test-cache"
+
+	RebaseExampleCommit = "101ce93f3a15c8122e3bb582e07b9f6648fbafc3"
 )
 
 var logger *slog.Logger
@@ -60,6 +63,19 @@ func cloneChartsTo(path string) (*git.Repository, error) {
 		return nil, fmt.Errorf("failed to open git repo: %v", err)
 	}
 
+	wt, err := repo.Worktree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get worktree: %v", err)
+	}
+
+	opts := git.CheckoutOptions{
+		Hash: plumbing.NewHash(RebaseExampleCommit),
+	}
+
+	if err := wt.Checkout(&opts); err != nil {
+		return nil, fmt.Errorf("failed to checkout commit: %v", err)
+	}
+
 	return repo, nil
 }
 
@@ -68,12 +84,6 @@ func setupRebase(t *testing.T, pkgName string) (string, *slog.Logger, *git.Repos
 	t.Cleanup(func() {
 		if err := os.RemoveAll(chartsDir); err != nil {
 			t.Fatalf("failed to remove temp dir: %v", err)
-		}
-	})
-
-	t.Cleanup(func() {
-		if err := os.RemoveAll(CacheDir); err != nil {
-			t.Fatalf("failed to remove cache dir: %v", err)
 		}
 	})
 

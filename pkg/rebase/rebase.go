@@ -34,6 +34,7 @@ func init() {
 
 // todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
 // todo: SHOULD check for some obvious errors in rebase (unresolved conflicts, helm templating failing, package can be prepared, etc)
+// todo: SHOULD support user commits in the rebase process
 
 const (
 	// ChartsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
