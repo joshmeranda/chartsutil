@@ -1,6 +1,7 @@
 package rebase_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	BadHelmTemplateContent = `{{ if .global.psp.enabled }}`
+	BadHelmTemplateContent = `{{ if .global.something.bad }}`
 )
 
 func setupVerify(t *testing.T, pkgName string) string {
@@ -64,6 +65,32 @@ func TestVerifyHelmLint(t *testing.T) {
 	}
 
 	if err := rebase.VerifyHelmLint(chartPath); err == nil {
+		if !errors.Is(err, rebase.ValidateError{}) {
+			t.Fatalf("expected ValidateError, got %T", err)
+		}
+
+		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestVerifyPatternNotFound(t *testing.T) {
+	chartPath := setupVerify(t, "chartsutil-example-archive")
+
+	verifyFunc := rebase.VerifyPatternNotFoundFactory(".something.bad")
+
+	if err := verifyFunc(chartPath); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := corruptHelm(chartPath); err != nil {
+		t.Fatalf("failed to corrupt helm template: %v", err)
+	}
+
+	if err := verifyFunc("something.bad"); err == nil {
+		if !errors.Is(err, rebase.ValidateError{}) {
+			t.Fatalf("expected ValidateError, got %T", err)
+		}
+
 		t.Fatalf("expected error, got nil")
 	}
 }
