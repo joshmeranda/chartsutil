@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-git/go-billy/v5"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
@@ -17,7 +18,7 @@ const (
 	BadHelmTemplateContent = `{{ if .global.something.bad }}`
 )
 
-func setupVerify(t *testing.T, pkgName string) string {
+func setupVerify(t *testing.T, pkgName string) (*charts.Package, billy.Filesystem) {
 	chartsDir := fmt.Sprintf("%s-charts", t.Name())
 	t.Cleanup(func() {
 		if err := os.RemoveAll(chartsDir); err != nil {
@@ -31,6 +32,10 @@ func setupVerify(t *testing.T, pkgName string) string {
 	}
 
 	rootFs := filesystem.GetFilesystem(chartsDir)
+	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
+	if err != nil {
+		t.Fatalf("failed to chroot to package dir: %v", err)
+	}
 
 	pkg, err := charts.GetPackage(rootFs, pkgName)
 	if err != nil {
@@ -41,7 +46,7 @@ func setupVerify(t *testing.T, pkgName string) string {
 		t.Fatalf("failed to prepare package: %v", err)
 	}
 
-	return filepath.Join(chartsDir, chartspath.RepositoryPackagesDir, pkgName, pkg.WorkingDir)
+	return pkg, pkgFs
 }
 
 func corruptHelm(chartPath string) error {
@@ -54,17 +59,17 @@ func corruptHelm(chartPath string) error {
 }
 
 func TestVerifyHelmLint(t *testing.T) {
-	chartPath := setupVerify(t, "chartsutil-example-archive")
+	pkg, pkgFs := setupVerify(t, "chartsutil-example-archive")
 
-	if err := rebase.VerifyHelmLint(chartPath); err != nil {
+	if err := rebase.ValidateHelmLint(pkg, pkgFs); err != nil {
 		t.Fatalf("failed to verify helm template: %v", err)
 	}
 
-	if err := corruptHelm(chartPath); err != nil {
+	if err := corruptHelm(filepath.Join(pkgFs.Root(), pkg.WorkingDir)); err != nil {
 		t.Fatalf("failed to corrupt helm template: %v", err)
 	}
 
-	if err := rebase.VerifyHelmLint(chartPath); err == nil {
+	if err := rebase.ValidateHelmLint(pkg, pkgFs); err == nil {
 		if !errors.Is(err, rebase.ValidateError{}) {
 			t.Fatalf("expected ValidateError, got %T", err)
 		}
@@ -74,19 +79,19 @@ func TestVerifyHelmLint(t *testing.T) {
 }
 
 func TestVerifyPatternNotFound(t *testing.T) {
-	chartPath := setupVerify(t, "chartsutil-example-archive")
+	pkg, pkgFs := setupVerify(t, "chartsutil-example-archive")
 
-	verifyFunc := rebase.VerifyPatternNotFoundFactory(".something.bad")
+	verifyFunc := rebase.ValidatePatternNotFoundFactory(".something.bad")
 
-	if err := verifyFunc(chartPath); err != nil {
+	if err := verifyFunc(pkg, pkgFs); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if err := corruptHelm(chartPath); err != nil {
+	if err := corruptHelm(filepath.Join(pkgFs.Root(), pkg.WorkingDir)); err != nil {
 		t.Fatalf("failed to corrupt helm template: %v", err)
 	}
 
-	if err := verifyFunc("something.bad"); err == nil {
+	if err := verifyFunc(pkg, pkgFs); err == nil {
 		if !errors.Is(err, rebase.ValidateError{}) {
 			t.Fatalf("expected ValidateError, got %T", err)
 		}
