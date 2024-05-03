@@ -33,7 +33,6 @@ func init() {
 }
 
 // todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
-// todo: SHOULD check for some obvious errors in rebase (unresolved conflicts, helm templating failing, package can be prepared, etc)
 // todo: SHOULD support user commits in the rebase process
 
 const (
@@ -63,6 +62,8 @@ type Rebase struct {
 
 	chartsRepo *git.Repository
 	chartsWt   *git.Worktree
+
+	verifiers []PackageValidateFunc
 }
 
 func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter iter.UpstreamIter, opts Options) (*Rebase, error) {
@@ -97,6 +98,12 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 
 		chartsRepo: chartsRepo,
 		chartsWt:   chartsWorktree,
+
+		verifiers: []PackageValidateFunc{
+			ValidateWorktree,
+			ValidatePatternNotFoundFactory("<<<<<<< HEAD"),
+			ValidateHelmLint,
+		},
 	}, nil
 }
 
@@ -111,6 +118,38 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 	}
 
 	return Commit(r.chartsWt, msg, chartPaths...)
+}
+
+func (r *Rebase) resolve() error {
+	for {
+		err := r.Resolver.Resolve(r.chartsWt)
+
+		if errors.Is(err, resolve.ErrAbort) {
+			if err := r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset}); err != nil {
+				return fmt.Errorf("failed to reset worktree after abort: %w", err)
+			}
+
+			return err
+		}
+
+		if err != nil {
+			return fmt.Errorf("received error from resolver: %w", err)
+		}
+
+		for _, verifier := range r.verifiers {
+			err := verifier(r.Package, r.chartsWt, r.PkgFs)
+			if errors.Is(err, &ValidateError{}) {
+				r.Logger.Error("failed validfation", "err", err)
+				continue
+			} else if err != nil {
+				return fmt.Errorf("could not verify chart: %w", err)
+			}
+		}
+
+		break
+	}
+
+	return nil
 }
 
 func (r *Rebase) handleUpstream(upstream puller.Puller) error {
@@ -146,26 +185,10 @@ func (r *Rebase) handleUpstream(upstream puller.Puller) error {
 		fmt.Println(string(output))
 	}
 
-	isClean, err := IsWorktreeClean(r.chartsWt)
-	if err != nil {
-		return fmt.Errorf("failed to check if worktree is clean: %w", err)
-	}
+	r.Logger.Info("could not merge automatically, running resolver")
 
-	if !isClean {
-		r.Logger.Info("could not merge automatically, running interactive shell...")
-		err := r.Resolver.Resolve(r.chartsWt)
-
-		if errors.Is(err, resolve.ErrAbort) {
-			if err := r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset}); err != nil {
-				return fmt.Errorf("failed to reset worktree after abort: %w", err)
-			}
-
-			return err
-		}
-
-		if err != nil {
-			return fmt.Errorf("received error from resolver: %w", err)
-		}
+	if err := r.resolve(); err != nil {
+		return fmt.Errorf("failed to resolve conflicts: %w", err)
 	}
 
 	if _, err := r.commitCharts(fmt.Sprintf("bringing charts to %s", GetRelaventUpstreamChange(upstream))); err != nil {
