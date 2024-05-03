@@ -31,7 +31,7 @@ func (e ValidateError) Is(err error) bool {
 }
 
 // PackageValidateFunc is a function that verifies a package using the provided filesystem.
-type PackageValidateFunc func(*charts.Package, billy.Filesystem) error
+type PackageValidateFunc func(*charts.Package, *git.Worktree, billy.Filesystem) error
 
 // ChartValidateFunc is a function that verifies a chart using the provided filesystem.
 type ChartValidateFunc func(string) error
@@ -50,7 +50,7 @@ func ForEachChart(pkg *charts.Package, pkgFs billy.Filesystem, fn ChartValidateF
 	return nil
 }
 
-func ValidateHelmLint(pkg *charts.Package, pkgFs billy.Filesystem) error {
+func ValidateHelmLint(pkg *charts.Package, wt *git.Worktree, pkgFs billy.Filesystem) error {
 	client := action.NewLint()
 
 	err := ForEachChart(pkg, pkgFs, func(chartPath string) error {
@@ -73,7 +73,7 @@ func ValidateHelmLint(pkg *charts.Package, pkgFs billy.Filesystem) error {
 }
 
 func ValidatePatternNotFoundFactory(pattern string) PackageValidateFunc {
-	return func(pkg *charts.Package, pkgFs billy.Filesystem) error {
+	return func(pkg *charts.Package, wt *git.Worktree, pkgFs billy.Filesystem) error {
 		err := ForEachChart(pkg, pkgFs, func(chartPath string) error {
 			err := filepath.WalkDir(chartPath, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
@@ -120,43 +120,41 @@ func ValidatePatternNotFoundFactory(pattern string) PackageValidateFunc {
 	}
 }
 
-func ValidateWorktreeFactory(wt *git.Worktree) PackageValidateFunc {
-	return func(pkg *charts.Package, _ billy.Filesystem) error {
-		status, err := wt.Status()
-		if err != nil {
-			return fmt.Errorf("failed to get worktree status: %w", err)
-		}
-
-		pkgDir := filepath.Join(chartspath.RepositoryPackagesDir, pkg.Name)
-		allowedPaths := []string{
-			filepath.Join(pkgDir, chartspath.GeneratedChangesDir),
-			filepath.Join(pkgDir, pkg.WorkingDir),
-		}
-
-		for _, ac := range pkg.AdditionalCharts {
-			allowedPaths = append(allowedPaths, filepath.Join(pkgDir, ac.WorkingDir))
-		}
-
-		for file, fs := range status {
-			if fs.Worktree != git.Unmodified {
-				return ValidateError{
-					chart: pkgDir,
-					inner: fmt.Errorf("worktree has unstaged changes"),
-				}
-			}
-
-			isFileAllowed := Any(allowedPaths, func(p string) bool {
-				return strings.HasPrefix(file, p)
-			})
-
-			if !isFileAllowed {
-				return ValidateError{
-					chart: pkgDir,
-					inner: fmt.Errorf("only changes to <package>/generated-changes or chart working directory are allowed"),
-				}
-			}
-		}
-
-		return nil
+func ValidateWorktree(pkg *charts.Package, wt *git.Worktree, _ billy.Filesystem) error {
+	status, err := wt.Status()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree status: %w", err)
 	}
+
+	pkgDir := filepath.Join(chartspath.RepositoryPackagesDir, pkg.Name)
+	allowedPaths := []string{
+		filepath.Join(pkgDir, chartspath.GeneratedChangesDir),
+		filepath.Join(pkgDir, pkg.WorkingDir),
+	}
+
+	for _, ac := range pkg.AdditionalCharts {
+		allowedPaths = append(allowedPaths, filepath.Join(pkgDir, ac.WorkingDir))
+	}
+
+	for file, fs := range status {
+		if fs.Worktree != git.Unmodified {
+			return ValidateError{
+				chart: pkgDir,
+				inner: fmt.Errorf("worktree has unstaged changes"),
+			}
+		}
+
+		isFileAllowed := Any(allowedPaths, func(p string) bool {
+			return strings.HasPrefix(file, p)
+		})
+
+		if !isFileAllowed {
+			return ValidateError{
+				chart: pkgDir,
+				inner: fmt.Errorf("only changes to <package>/generated-changes or chart working directory are allowed"),
+			}
+		}
+	}
+
+	return nil
 }
