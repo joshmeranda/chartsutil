@@ -10,9 +10,9 @@ At a high level, the rebase is esentially just preparing the target package, pul
 
 When the user requests for a rebase, we immediately switch to a `quarantine` branch to protect the working development branch. From here we make a few pre-flight checks, prepare the package, and commit the changes to the chart working directory.
 
-Next, on a new `charts-staging` branch, we pull and commit the upstream chart version. On the `quarantine` branch we pull those changes and allow the configeured resolver to handle any conflicting changes between those in a pacakges `generated-changes` and those found from the new upstream. Typically this will be done via an interactive shell allowing users to view and manually resolve those merge conflicts themselves, though *more* options may be exposed in the future. 
+Next, on a new `charts-staging` branch, we pull and commit the upstream chart version. On the `quarantine` branch we pull those changes and allow the configeured resolver to handle any conflicting changes between the prepared chart and the new upstream. Typically this will be done via an interactive shell allowing users to view and manually resolve those merge conflicts themselves, though *more* options may be exposed in the future. 
 
-Once the package's working chart has been synced up to the desired upstream on the quarantine branch, we generate the patch, and update the `package.yaml` to reflect the new upstream.
+Once the prepared chart has been synced up to the desired upstream on the quarantine branch, we generate the patch, and update the `package.yaml` to reflect the new upstream.
 
 Finally, we cherry-pick the `generated-changes` and `package.yaml` commits back to the main branch. Now we are done!
 
@@ -34,4 +34,4 @@ Each time after an upstream is merged but before changes are commited, we run so
 
 1. Lint each generated chart (and additional chart), same as `helm lint`
 2. Check the worktree for instances of `<<<<<<< HEAD` to ensure all merge conflicts have been handled
-3. Ensure only changes to `generated-changes` and each generated chart have been made
+3. Ensure only changes to the generated charts have been staged
