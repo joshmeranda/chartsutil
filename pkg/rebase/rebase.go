@@ -211,8 +211,6 @@ func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
 		return plumbing.ZeroHash, fmt.Errorf("failed to generate patch: %w", err)
 	}
 
-	r.chartsWt.Reset(&git.ResetOptions{Mode: git.HardReset})
-
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
 	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, whatChanged), patchDir)
@@ -323,12 +321,12 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("bug: no upstreams were checked (iterator was empty)")
 		}
 
-		if patchHash, err = r.updatePatches(GetRelaventUpstreamChange(last)); err != nil {
-			return fmt.Errorf("failed to generate patch: %w", err)
-		}
-
 		if packageHash, err = r.updatePackageYaml(last); err != nil {
 			return fmt.Errorf("failed to update package.yaml: %w", err)
+		}
+
+		if patchHash, err = r.updatePatches(GetRelaventUpstreamChange(last)); err != nil {
+			return fmt.Errorf("failed to generate patch: %w", err)
 		}
 
 		return nil
