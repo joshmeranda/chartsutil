@@ -64,7 +64,7 @@ type Rebase struct {
 	chartsWt     *git.Worktree
 	startingHead plumbing.Hash
 
-	verifiers []PackageValidateFunc
+	validators []PackageValidateFunc
 }
 
 func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesystem, iter iter.UpstreamIter, opts Options) (*Rebase, error) {
@@ -106,7 +106,7 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 		chartsWt:     chartsWorktree,
 		startingHead: head.Hash(),
 
-		verifiers: []PackageValidateFunc{
+		validators: []PackageValidateFunc{
 			ValidateWorktree,
 			ValidatePatternNotFoundFactory("<<<<<<< HEAD"),
 			ValidateHelmLint,
@@ -128,6 +128,7 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 }
 
 func (r *Rebase) resolve() error {
+resolveLoop:
 	for {
 		err := r.Resolver.Resolve(r.chartsWt)
 
@@ -143,11 +144,11 @@ func (r *Rebase) resolve() error {
 			return fmt.Errorf("received error from resolver: %w", err)
 		}
 
-		for _, verifier := range r.verifiers {
-			err := verifier(r.Package, r.chartsWt, r.PkgFs)
-			if errors.Is(err, &ValidateError{}) {
+		for _, validator := range r.validators {
+			err := validator(r.Package, r.chartsWt, r.PkgFs)
+			if errors.Is(err, ValidateError{}) {
 				r.Logger.Error("failed validfation", "err", err)
-				continue
+				continue resolveLoop
 			} else if err != nil {
 				return fmt.Errorf("could not verify chart: %w", err)
 			}
