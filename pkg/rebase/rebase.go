@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/go-git/go-billy/v5"
@@ -34,6 +35,7 @@ func init() {
 }
 
 // todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
+// todo: MUST ensure that there are no empty commits when cherry-picking
 
 const (
 	// ChartsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
@@ -334,14 +336,17 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to get commit iterator: %w", err)
 		}
 
-		// todo: fix the order in the cherry-pick
+		commits := make([]string, 0)
 		commitIter.ForEach(func(c *object.Commit) error {
 			if c.Author.Name != "chartsutil-rebase" {
-				cherryPickArgs = append(cherryPickArgs, c.Hash.String())
+				commits = append(commits, c.Hash.String())
 			}
 
 			return nil
 		})
+		slices.Reverse(commits)
+
+		cherryPickArgs = append(cherryPickArgs, commits...)
 
 		return nil
 	})
@@ -354,8 +359,6 @@ func (r *Rebase) Rebase() error {
 	time.Sleep(time.Second * 2)
 
 	r.Logger.Info("cherry picking from quarantine brach", "commits", cherryPickArgs[1:])
-	// cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
-	// cmd := exec.Command("git", "cherry-pick", "--ff", patchHash.String(), packageHash.String())
 	cmd := exec.Command("git", cherryPickArgs...)
 	cmd.Dir = r.PkgFs.Root()
 	cmd.Stdout = os.Stdout
