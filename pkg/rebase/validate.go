@@ -128,6 +128,7 @@ func ValidateWorktree(pkg *charts.Package, wt *git.Worktree, _ billy.Filesystem)
 
 	pkgDir := filepath.Join(chartspath.RepositoryPackagesDir, pkg.Name)
 	allowedPaths := []string{
+		// todo: do we want to allow changes to generated-changes since we are working with the raw charts?
 		filepath.Join(pkgDir, chartspath.GeneratedChangesDir),
 		filepath.Join(pkgDir, pkg.WorkingDir),
 	}

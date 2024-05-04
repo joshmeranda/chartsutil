@@ -27,3 +27,11 @@ While allowed for non-git packages, it is not particulalry meaningful and the wo
 ### Backups
 
 When the `--backup` flag is present, we backup the updated prepared package to `.rebase-backup` something goes wrong later we don't lose all of our good progress. Especially nice for incremental rebases.
+
+### Validations
+
+Each time after an upstream is merged but before changes are commited, we run some validations on the current state of the worktree to ensure that we are not commitintg a malformed chart. These validations from issues that we have encounterd in the past caused by either easy to miss errors or green develolpers (including me) not quite understanding the scope of the changes they are making. Below are a list of the validations we run:
+
+1. Lint each generated chart (and additional chart), same as `helm lint`
+2. Check the worktree for instances of `<<<<<<< HEAD` to ensure all merge conflicts have been handled
+3. Ensure only changes to `generated-changes` and each generated chart have been made
