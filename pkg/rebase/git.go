@@ -20,13 +20,18 @@ func GetRemoteBranchRefName(branch, remote string) plumbing.ReferenceName {
 
 type WorktreeFunc func(wt *git.Worktree) error
 
-func CreateBranch(r *git.Repository, branch string) error {
-	head, err := r.Head()
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD: %w", err)
+// CreateBranch creates a new branch with the given hash as the head, or the current HEAD hash if empty.
+func CreateBranch(r *git.Repository, branch string, hash plumbing.Hash) error {
+	if hash == plumbing.ZeroHash {
+		head, err := r.Head()
+		if err != nil {
+			return fmt.Errorf("failed to get HEAD: %w", err)
+		}
+
+		hash = head.Hash()
 	}
 
-	ref := plumbing.NewHashReference(GetLocalBranchRefName(branch), head.Hash())
+	ref := plumbing.NewHashReference(GetLocalBranchRefName(branch), hash)
 	if err := r.Storer.SetReference(ref); err != nil {
 		return fmt.Errorf("failed to create branch: %w", err)
 	}

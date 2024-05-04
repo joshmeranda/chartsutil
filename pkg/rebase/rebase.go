@@ -60,8 +60,9 @@ type Rebase struct {
 	PkgFs   billy.Filesystem
 	Iter    iter.UpstreamIter
 
-	chartsRepo *git.Repository
-	chartsWt   *git.Worktree
+	chartsRepo   *git.Repository
+	chartsWt     *git.Worktree
+	startingHead plumbing.Hash
 
 	verifiers []PackageValidateFunc
 }
@@ -88,6 +89,11 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 		return nil, fmt.Errorf("failed to get charts worktree: %w", err)
 	}
 
+	head, err := chartsRepo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get HEAD: %w", err)
+	}
+
 	return &Rebase{
 		Options: opts,
 
@@ -96,8 +102,9 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 		PkgFs:   pkgFs,
 		Iter:    iter,
 
-		chartsRepo: chartsRepo,
-		chartsWt:   chartsWorktree,
+		chartsRepo:   chartsRepo,
+		chartsWt:     chartsWorktree,
+		startingHead: head.Hash(),
 
 		verifiers: []PackageValidateFunc{
 			ValidateWorktree,
@@ -155,7 +162,7 @@ func (r *Rebase) resolve() error {
 func (r *Rebase) handleUpstream(upstream puller.Puller) error {
 	r.Logger.Info(fmt.Sprintf("bringing charts to %s", GetRelaventUpstreamChange(upstream)))
 
-	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName); err != nil {
+	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName, r.startingHead); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, ChartsStagingBranchName)
@@ -265,7 +272,7 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("charts worktree is not clean")
 	}
 
-	if err := CreateBranch(r.chartsRepo, ChartsQuarantineBranchName); err != nil {
+	if err := CreateBranch(r.chartsRepo, ChartsQuarantineBranchName, plumbing.ZeroHash); err != nil {
 		return fmt.Errorf("failed to create quarantine branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, ChartsQuarantineBranchName)
