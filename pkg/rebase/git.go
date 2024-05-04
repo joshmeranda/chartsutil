@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // GetLocalBranchRefName returns the reference name of a given local branch
@@ -121,7 +122,7 @@ func IsWorktreeClean(wt *git.Worktree) (bool, error) {
 	return status.IsClean(), nil
 }
 
-func Commit(wt *git.Worktree, message string, paths ...string) (plumbing.Hash, error) {
+func Commit(wt *git.Worktree, shouldCherryPick bool, message string, paths ...string) (plumbing.Hash, error) {
 	for _, path := range paths {
 		if _, err := wt.Add(path); err != nil {
 			return plumbing.ZeroHash, fmt.Errorf("failed to add '%s' to index: %w", path, err)
@@ -132,7 +133,14 @@ func Commit(wt *git.Worktree, message string, paths ...string) (plumbing.Hash, e
 		message = fmt.Sprintf("made changes to %s", strings.Join(paths, ", "))
 	}
 
-	hash, err := wt.Commit(message, &git.CommitOptions{})
+	commitOpts := &git.CommitOptions{}
+	if !shouldCherryPick {
+		commitOpts.Author = &object.Signature{
+			Name: "chartsutil-rebase",
+		}
+	}
+
+	hash, err := wt.Commit(message, commitOpts)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit changes: %w", err)
 	}

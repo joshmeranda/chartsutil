@@ -13,6 +13,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
 	"github.com/mikefarah/yq/v4/pkg/yqlib"
@@ -33,7 +34,6 @@ func init() {
 }
 
 // todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
-// todo: SHOULD support user commits in the rebase process
 
 const (
 	// ChartsStagingBranchName is the name of the branch used to stage changes for user interaction / review.
@@ -124,7 +124,7 @@ func (r *Rebase) commitCharts(msg string) (plumbing.Hash, error) {
 		chartPaths[i+1] = filepath.Join(pkgDir, chart.WorkingDir)
 	}
 
-	return Commit(r.chartsWt, msg, chartPaths...)
+	return Commit(r.chartsWt, false, msg, chartPaths...)
 }
 
 func (r *Rebase) resolve() error {
@@ -213,7 +213,7 @@ func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
 
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
-	hash, err := Commit(r.chartsWt, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, whatChanged), patchDir)
+	hash, err := Commit(r.chartsWt, true, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, whatChanged), patchDir)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit patch changes: %w", err)
 	}
@@ -253,7 +253,7 @@ func (r *Rebase) updatePackageYaml(upstream puller.Puller) (plumbing.Hash, error
 		return plumbing.ZeroHash, fmt.Errorf("failed to complete in-place update: %w", err)
 	}
 
-	hash, err := Commit(r.chartsWt, "Update package.yaml", relativePkgPath)
+	hash, err := Commit(r.chartsWt, true, "Update package.yaml", relativePkgPath)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit package.yaml changes: %w", err)
 	}
@@ -271,13 +271,13 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("charts worktree is not clean")
 	}
 
+	cherryPickArgs := []string{"cherry-pick"}
+	rebaseStart := time.Now()
+
 	if err := CreateBranch(r.chartsRepo, ChartsQuarantineBranchName, plumbing.ZeroHash); err != nil {
 		return fmt.Errorf("failed to create quarantine branch: %w", err)
 	}
 	defer DeleteBranch(r.chartsRepo, ChartsQuarantineBranchName)
-
-	var patchHash plumbing.Hash
-	var packageHash plumbing.Hash
 
 	err = DoOnBranch(r.chartsRepo, r.chartsWt, ChartsQuarantineBranchName, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
@@ -321,13 +321,27 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("bug: no upstreams were checked (iterator was empty)")
 		}
 
-		if packageHash, err = r.updatePackageYaml(last); err != nil {
+		if _, err = r.updatePackageYaml(last); err != nil {
 			return fmt.Errorf("failed to update package.yaml: %w", err)
 		}
 
-		if patchHash, err = r.updatePatches(GetRelaventUpstreamChange(last)); err != nil {
+		if _, err = r.updatePatches(GetRelaventUpstreamChange(last)); err != nil {
 			return fmt.Errorf("failed to generate patch: %w", err)
 		}
+
+		commitIter, err := r.chartsRepo.Log(&git.LogOptions{Since: &rebaseStart})
+		if err != nil {
+			return fmt.Errorf("failed to get commit iterator: %w", err)
+		}
+
+		// todo: fix the order in the cherry-pick
+		commitIter.ForEach(func(c *object.Commit) error {
+			if c.Author.Name != "chartsutil-rebase" {
+				cherryPickArgs = append(cherryPickArgs, c.Hash.String())
+			}
+
+			return nil
+		})
 
 		return nil
 	})
@@ -339,9 +353,10 @@ func (r *Rebase) Rebase() error {
 	r.Logger.Info("letting git catch up...")
 	time.Sleep(time.Second * 2)
 
+	r.Logger.Info("cherry picking from quarantine brach", "commits", cherryPickArgs[1:])
 	// cmd := exec.Command("git", "cherry-pick", patchHash.String(), packageHash.String())
 	// cmd := exec.Command("git", "cherry-pick", "--ff", patchHash.String(), packageHash.String())
-	cmd := exec.Command("git", "cherry-pick", "--allow-empty", patchHash.String(), packageHash.String())
+	cmd := exec.Command("git", cherryPickArgs...)
 	cmd.Dir = r.PkgFs.Root()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

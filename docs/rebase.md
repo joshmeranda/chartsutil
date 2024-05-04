@@ -10,7 +10,7 @@ At a high level, the rebase is esentially just preparing the target package, pul
 
 When the user requests for a rebase, we immediately switch to a `quarantine` branch to protect the working development branch. From here we make a few pre-flight checks, prepare the package, and commit the changes to the chart working directory.
 
-Next, on a new `charts-staging` branch, we pull and commit the upstream chart version. On the `quarantine` branch we pull those changes and allow the configeured resolver to handle any conflicting changes between the prepared chart and the new upstream. Typically this will be done via an interactive shell allowing users to view and manually resolve those merge conflicts themselves, though *more* options may be exposed in the future. 
+Next, on a new `charts-staging` branch, we pull and commit the upstream chart version. On the `quarantine` branch we pull those changes and allow the configeured resolver to handle any conflicting changes between the prepared chart and the new upstream. Typically this will be done via an interactive shell allowing users to view and manually resolve those merge conflicts themselves, though *more* options may be exposed in the future. While this shell is running, any commits you make (to bump a builkd tool version, make a necessary change to package.yaml, etc) will be pulled back into the original branch.
 
 Once the prepared chart has been synced up to the desired upstream on the quarantine branch, we generate the patch, and update the `package.yaml` to reflect the new upstream.
 
@@ -32,6 +32,6 @@ When the `--backup` flag is present, we backup the updated prepared package to `
 
 Each time after an upstream is merged but before changes are commited, we run some validations on the current state of the worktree to ensure that we are not commitintg a malformed chart. These validations from issues that we have encounterd in the past caused by either easy to miss errors or green develolpers (including me) not quite understanding the scope of the changes they are making. Below are a list of the validations we run:
 
-1. Lint each generated chart (and additional chart), same as `helm lint`
+1. Lint each prepared chart (and additional chart), same as `helm lint`
 2. Check the worktree for instances of `<<<<<<< HEAD` to ensure all merge conflicts have been handled
-3. Ensure only changes to the generated charts have been staged
+3. Ensure only changes to the prepared charts have been staged
