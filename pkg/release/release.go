@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	DefaultReleaseNamePattern = "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-rc[-.]?[0-9]+)?$"
+	DefaultReleaseNamePattern = "v?[0-9]+\\.[0-9]+\\.[0-9]+(-rc[-.]?[0-9]+)?"
 	MaxAvailableReleases      = 1000
 )
 

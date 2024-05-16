@@ -34,7 +34,7 @@ func TestTagPattern(t *testing.T) {
 		},
 		{
 			Tag:         "some-prefix-v1.0.0",
-			Expectmatch: false,
+			Expectmatch: true,
 		},
 	}
 

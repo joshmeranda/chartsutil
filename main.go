@@ -22,6 +22,8 @@ import (
 
 const (
 	DefaultPackageEnv = "PACKAGE"
+
+	CategoryPatternMatching = "Pattern Matching"
 )
 
 var (
@@ -96,7 +98,8 @@ func rebaseCheck(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
 	rootFs := filesystem.GetFilesystem(chartsDir)
-	releaseNamePattern := ctx.String("release-pattern")
+
+	releaseNamePattern := ctx.String("prefix") + ctx.String("pattern") + ctx.String("postfix")
 	releaseRegex, err := regexp.Compile(releaseNamePattern)
 	if err != nil {
 		return fmt.Errorf("failed to compile tag pattern: %w", err)
@@ -141,7 +144,7 @@ func rebaseCheck(ctx *cli.Context) error {
 
 		currentReleaseDate = release.CreatedAt.Time
 	default:
-		logger.Warn("failed to fetch tag for current commit, using commti date", "err", err, "commit", *pullOpts.Commit)
+		logger.Warn("failed to fetch tag for current commit, using commit date", "err", err, "commit", *pullOpts.Commit)
 
 		commit, _, err := client.Git.GetCommit(ctx.Context, ref.Owner, ref.Name, *pullOpts.Commit)
 		if err != nil {
@@ -156,6 +159,7 @@ func rebaseCheck(ctx *cli.Context) error {
 		NamePattern: releaseRegex,
 	}
 
+	logger.Info("checking for upstream releases", "query", query)
 	releases, err := release.ReleasesForUpstream(ctx.Context, ref, query)
 	if err != nil {
 		return fmt.Errorf("failed to list upstream releases: %w", err)
@@ -198,10 +202,21 @@ func main() {
 						Action:      rebaseCheck,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
-								Name:    "release-pattern",
-								Usage:   "regex pattern to match release names",
-								Aliases: []string{"p"},
-								Value:   release.DefaultReleaseNamePattern,
+								Name:     "pattern",
+								Usage:    "regex pattern to match release names",
+								Value:    release.DefaultReleaseNamePattern,
+								Category: CategoryPatternMatching,
+							},
+							&cli.StringFlag{
+								Name:     "prefix",
+								Usage:    "prefix to add to the release pattern",
+								Category: CategoryPatternMatching,
+							},
+							&cli.StringFlag{
+								Name:     "postfux",
+								Aliases:  []string{"sufix"},
+								Usage:    "postfix to add to the release pattern",
+								Category: CategoryPatternMatching,
 							},
 						},
 					},
