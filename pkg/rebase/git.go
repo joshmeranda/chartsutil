@@ -113,6 +113,7 @@ func DoOnBranch(r *git.Repository, wt *git.Worktree, branch string, f WorktreeFu
 	return nil
 }
 
+// todo: should ignore .charts-build-scripts dir
 func IsWorktreeClean(wt *git.Worktree) (bool, error) {
 	status, err := wt.Status()
 	if err != nil {

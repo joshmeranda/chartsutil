@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	DefaultPackageEnv = "PACKAGE"
+	EnvPackage   = "PACKAGE"
+	EnvChartsDir = "CHARTS_DIR"
 
 	CategoryPatternMatching = "Pattern Matching"
 )
@@ -183,12 +184,13 @@ func main() {
 		Name: "chart-utils",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "charts-dir",
-				Value: ".",
+				Name:    "charts-dir",
+				Value:   ".",
+				EnvVars: []string{EnvChartsDir},
 			},
 			&cli.StringFlag{
 				Name:     "package",
-				EnvVars:  []string{DefaultPackageEnv},
+				EnvVars:  []string{EnvPackage},
 				Required: true,
 			},
 		},
