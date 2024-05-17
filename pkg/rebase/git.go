@@ -2,11 +2,17 @@ package rebase
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+)
+
+var (
+	// AllowedDirectories is the list of directories that are allowed to be untracked in a repository wiuthout being considered dirty.
+	AllowedDirectories = []string{".charts-build-scripts"}
 )
 
 // GetLocalBranchRefName returns the reference name of a given local branch
@@ -113,14 +119,29 @@ func DoOnBranch(r *git.Repository, wt *git.Worktree, branch string, f WorktreeFu
 	return nil
 }
 
-// todo: should ignore .charts-build-scripts dir
+func isPathAllowed(path string) bool {
+	return slices.ContainsFunc(AllowedDirectories, func(allowed string) bool {
+		return strings.HasPrefix(path, allowed)
+	})
+}
+
 func IsWorktreeClean(wt *git.Worktree) (bool, error) {
-	status, err := wt.Status()
+	wtStatus, err := wt.Status()
 	if err != nil {
 		return false, fmt.Errorf("failed to get worktree status: %w", err)
 	}
 
-	return status.IsClean(), nil
+	for path, status := range wtStatus {
+		if (status.Staging == git.Untracked || status.Worktree == git.Untracked) && isPathAllowed(path) {
+			continue
+		}
+
+		if status.Worktree != git.Unmodified || status.Staging != git.Unmodified {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func Commit(wt *git.Worktree, shouldCherryPick bool, message string, paths ...string) (plumbing.Hash, error) {
