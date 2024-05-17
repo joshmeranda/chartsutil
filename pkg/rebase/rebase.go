@@ -209,6 +209,8 @@ func (r *Rebase) handleUpstream(upstream puller.Puller) error {
 }
 
 func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
+	r.Logger.Info("generating patch")
+
 	if err := r.Package.GeneratePatch(); err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to generate patch: %w", err)
 	}
@@ -228,6 +230,8 @@ func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
 }
 
 func (r *Rebase) updatePackageYaml(upstream puller.Puller) (plumbing.Hash, error) {
+	r.Logger.Info("updating package.yaml")
+
 	pkgFile := filepath.Join(r.PkgFs.Root(), chartspath.PackageOptionsFile)
 	relativePkgPath := filepath.Join(chartspath.RepositoryPackagesDir, r.Package.Name)
 

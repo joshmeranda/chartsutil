@@ -84,7 +84,7 @@ func pkgRebase(ctx *cli.Context) error {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
 
-	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rebaseTarget)
+	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rebaseTarget, "incremental", incremental)
 
 	if err := rb.Rebase(); err != nil {
 		return err
@@ -95,7 +95,7 @@ func pkgRebase(ctx *cli.Context) error {
 
 // todo: add verbosity flags: verbose and quiet (only necessary output)
 
-func rebaseCheck(ctx *cli.Context) error {
+func upstreamCheck(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
 	rootFs := filesystem.GetFilesystem(chartsDir)
@@ -201,7 +201,7 @@ func main() {
 					{
 						Name:        "check",
 						Description: "check the chart upstream for newer versions of the base chart",
-						Action:      rebaseCheck,
+						Action:      upstreamCheck,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:     "pattern",
