@@ -277,7 +277,7 @@ func (r *Rebase) Rebase() error {
 		return fmt.Errorf("charts worktree is not clean")
 	}
 
-	cherryPickArgs := []string{"cherry-pick"}
+	cherryPickCommits := []string{}
 	rebaseStart := time.Now()
 
 	if err := CreateBranch(r.chartsRepo, ChartsQuarantineBranchName, plumbing.ZeroHash); err != nil {
@@ -305,7 +305,13 @@ func (r *Rebase) Rebase() error {
 					src := filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir)
 					dst := filepath.Join(RebaseBackupDir)
 
-					if err := cp.Copy(src, dst, cp.Options{}); err != nil {
+					cpOpts := cp.Options{
+						OnDirExists: func(src string, dest string) cp.DirExistsAction {
+							return cp.Replace
+						},
+					}
+
+					if err := cp.Copy(src, dst, cpOpts); err != nil {
 						r.Logger.Warn("failed to backup %s: %s", src, err.Error())
 					}
 				}()
@@ -340,17 +346,14 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to get commit iterator: %w", err)
 		}
 
-		commits := make([]string, 0)
 		commitIter.ForEach(func(c *object.Commit) error {
 			if c.Author.Name != "chartsutil-rebase" {
-				commits = append(commits, c.Hash.String())
+				cherryPickCommits = append(cherryPickCommits, c.Hash.String())
 			}
 
 			return nil
 		})
-		slices.Reverse(commits)
-
-		cherryPickArgs = append(cherryPickArgs, commits...)
+		slices.Reverse(cherryPickCommits)
 
 		return nil
 	})
@@ -362,13 +365,13 @@ func (r *Rebase) Rebase() error {
 	r.Logger.Info("letting git catch up...")
 	time.Sleep(time.Second * 2)
 
-	r.Logger.Info("cherry picking from quarantine brach", "commits", cherryPickArgs[1:])
+	r.Logger.Info("cherry picking from quarantine brach", "commits", cherryPickCommits)
+	cherryPickArgs := append([]string{"cherry-pick", "--allow-empty"}, cherryPickCommits...)
 	cmd := exec.Command("git", cherryPickArgs...)
 	cmd.Dir = r.PkgFs.Root()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Println(string(out))
 		return fmt.Errorf("failed to cherry-pick changes: %w", err)
 	}
 
