@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/filesystem"
 	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -25,11 +27,35 @@ const (
 	EnvChartsDir = "CHARTS_DIR"
 
 	CategoryPatternMatching = "Pattern Matching"
+	CategoryVerbosity       = "Verbosity"
 )
 
 var (
 	logger *slog.Logger
 )
+
+func setup(ctx *cli.Context) error {
+	if !ctx.Bool("show-charts-logs") {
+		logrus.SetOutput(io.Discard)
+	}
+
+	var out io.Writer
+
+	out = os.Stdout
+	opts := &slog.HandlerOptions{}
+
+	switch {
+	case ctx.Bool("silent"):
+		out = io.Discard
+	case ctx.Bool("verbose"):
+		out = os.Stdout
+		opts.Level = slog.LevelDebug
+	}
+
+	logger = slog.New(slog.NewTextHandler(out, opts))
+
+	return nil
+}
 
 func pkgRebase(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
@@ -92,8 +118,6 @@ func pkgRebase(ctx *cli.Context) error {
 
 	return nil
 }
-
-// todo: add verbosity flags: verbose and quiet (only necessary output)
 
 func upstreamCheck(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
@@ -178,8 +202,6 @@ func upstreamCheck(ctx *cli.Context) error {
 }
 
 func main() {
-	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-
 	app := cli.App{
 		Name: "chart-utils",
 		Flags: []cli.Flag{
@@ -193,7 +215,17 @@ func main() {
 				EnvVars:  []string{EnvPackage},
 				Required: true,
 			},
+
+			&cli.BoolFlag{
+				Name:     "show-charts-logs",
+				Category: CategoryVerbosity,
+			},
+			&cli.BoolFlag{
+				Name:     "silent",
+				Category: CategoryVerbosity,
+			},
 		},
+		Before: setup,
 		Commands: []*cli.Command{
 			{
 				Name: "upstream",
