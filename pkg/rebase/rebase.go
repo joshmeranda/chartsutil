@@ -301,18 +301,17 @@ func (r *Rebase) Rebase() error {
 		err := iter.ForEach(r.Iter, func(p puller.Puller) error {
 			if r.EnableBackup {
 				defer func() {
-					r.Logger.Info("backing up current state of charts")
 					src := filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir)
 					dst := filepath.Join(RebaseBackupDir)
+					r.Logger.Info("backing up current state of charts", "dir", dst)
 
 					cpOpts := cp.Options{
 						OnDirExists: func(src string, dest string) cp.DirExistsAction {
 							return cp.Replace
 						},
 					}
-
 					if err := cp.Copy(src, dst, cpOpts); err != nil {
-						r.Logger.Warn("failed to backup %s: %s", src, err.Error())
+						r.Logger.Warn("failed to backup %s to %s: %s", src, err.Error())
 					}
 				}()
 			}
