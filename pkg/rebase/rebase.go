@@ -18,7 +18,6 @@ import (
 	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/resolve"
 	"github.com/mikefarah/yq/v4/pkg/yqlib"
-	cp "github.com/otiai10/copy"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
 	"github.com/rancher/charts-build-scripts/pkg/puller"
@@ -285,6 +284,28 @@ func (r *Rebase) Rebase() error {
 	}
 	defer DeleteBranch(r.chartsRepo, ChartsQuarantineBranchName)
 
+	var backup Backup
+
+	if r.EnableBackup {
+		sources := make([]string, len(r.Package.AdditionalCharts)+1)
+		sources[0] = filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir)
+		for i, chart := range r.Package.AdditionalCharts {
+			sources[i+1] = filepath.Join(r.PkgFs.Root(), chart.WorkingDir)
+		}
+
+		backup, err = NewBackup(sources, RebaseBackupDir)
+		if err != nil {
+			return fmt.Errorf("failed to create backup: %w", err)
+		}
+	} else {
+		backup = &NoopBackup{}
+	}
+	defer func() {
+		if err := backup.Close(); err != nil {
+			r.Logger.Warn("failed to close backup", "err", err)
+		}
+	}()
+
 	err = DoOnBranch(r.chartsRepo, r.chartsWt, ChartsQuarantineBranchName, func(wt *git.Worktree) error {
 		r.Logger.Info("preparing package")
 
@@ -299,22 +320,11 @@ func (r *Rebase) Rebase() error {
 		var last puller.Puller
 
 		err := iter.ForEach(r.Iter, func(p puller.Puller) error {
-			if r.EnableBackup {
-				defer func() {
-					src := filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir)
-					dst := filepath.Join(RebaseBackupDir)
-					r.Logger.Info("backing up current state of charts", "src", src, "dst", dst)
-
-					cpOpts := cp.Options{
-						OnDirExists: func(src string, dest string) cp.DirExistsAction {
-							return cp.Replace
-						},
-					}
-					if err := cp.Copy(src, dst, cpOpts); err != nil {
-						r.Logger.Warn("failed to commit backup", "src", src, "dst", dst, "err", err.Error())
-					}
-				}()
-			}
+			defer func() {
+				if err := backup.Backup(); err != nil {
+					r.Logger.Warn("failed to backup charts: %w", err)
+				}
+			}()
 
 			last = p
 
