@@ -66,7 +66,7 @@ func (s *Shell) Resolve(wt *git.Worktree) error {
 
 	if s.shouldAbort(wt.Filesystem) {
 		if err := wt.Filesystem.Remove(AbortFileName); err != nil {
-			s.Logger.Error("failed to remove abort file: %w", err)
+			s.Logger.Error("failed to remove abort file", "err", err)
 		}
 
 		return ErrAbort

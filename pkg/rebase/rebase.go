@@ -149,7 +149,7 @@ resolveLoop:
 		for _, validator := range r.validators {
 			err := validator(r.Package, r.chartsWt, r.PkgFs)
 			if errors.Is(err, ValidateError{}) {
-				r.Logger.Error("failed validfation", "err", err)
+				r.Logger.Error("failed validation", "err", err)
 				continue resolveLoop
 			} else if err != nil {
 				return fmt.Errorf("could not verify chart: %w", err)
@@ -163,7 +163,7 @@ resolveLoop:
 }
 
 func (r *Rebase) handleUpstream(upstream puller.Puller) error {
-	r.Logger.Info(fmt.Sprintf("bringing charts to %s", GetRelaventUpstreamChange(upstream)))
+	r.Logger.Info("bringing charts to commit", "commit", GetRelaventUpstreamChange(upstream))
 
 	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName, r.startingHead); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
@@ -303,7 +303,7 @@ func (r *Rebase) Rebase() error {
 				defer func() {
 					src := filepath.Join(r.PkgFs.Root(), r.Package.WorkingDir)
 					dst := filepath.Join(RebaseBackupDir)
-					r.Logger.Info("backing up current state of charts", "dir", dst)
+					r.Logger.Info("backing up current state of charts", "src", src, "dst", dst)
 
 					cpOpts := cp.Options{
 						OnDirExists: func(src string, dest string) cp.DirExistsAction {
@@ -311,7 +311,7 @@ func (r *Rebase) Rebase() error {
 						},
 					}
 					if err := cp.Copy(src, dst, cpOpts); err != nil {
-						r.Logger.Warn("failed to backup %s to %s: %s", src, err.Error())
+						r.Logger.Warn("failed to commit backup", "src", src, "dst", dst, "err", err.Error())
 					}
 				}()
 			}
