@@ -28,6 +28,7 @@ const (
 
 	CategoryPatternMatching = "Pattern Matching"
 	CategoryVerbosity       = "Verbosity"
+	CategoryUpstreamSpec    = "Upstream Specifications"
 )
 
 var (
@@ -63,12 +64,6 @@ func pkgRebase(ctx *cli.Context) error {
 	incremental := ctx.Bool("increment")
 	backup := ctx.Bool("backup")
 
-	if ctx.NArg() != 1 {
-		return fmt.Errorf("expected exactly one argument, got %d", ctx.NArg())
-	}
-
-	rebaseTarget := ctx.Args().First()
-
 	rootFs := filesystem.GetFilesystem(chartsDir)
 	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
 	if err != nil {
@@ -86,15 +81,29 @@ func pkgRebase(ctx *cli.Context) error {
 		return err
 	}
 
+	delta := iter.UpstreamDelta{}
+
+	if ctx.IsSet("commit") {
+		delta.Commit = rebase.ToPtr(ctx.String("commit"))
+	}
+
+	if ctx.IsSet("url") {
+		delta.URL = ctx.String("url")
+	}
+
+	if ctx.IsSet("subdirectory") {
+		delta.Subdirectory = rebase.ToPtr(ctx.String("subdirectory"))
+	}
+
 	var upstreamIter iter.UpstreamIter
 
 	if incremental {
-		upstreamIter, err = iter.IterForUpstream(pkg.Chart.Upstream, rebaseTarget)
+		upstreamIter, err = iter.IterForUpstream(pkg.Chart.Upstream, delta)
 		if err != nil {
 			return fmt.Errorf("failed to create puller iterator: %w", err)
 		}
 	} else {
-		upstreamIter, err = iter.NewSingleIter(pkg.Chart.Upstream, rebaseTarget)
+		upstreamIter, err = iter.NewSingleIter(pkg.Chart.Upstream, delta)
 		if err != nil {
 			return fmt.Errorf("failed to create single puller: %w", err)
 		}
@@ -110,7 +119,12 @@ func pkgRebase(ctx *cli.Context) error {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
 
-	logger.Info("attempting to rebase pacakge", "pkg", rb.Package.Name, "from", *pkg.Chart.Upstream.GetOptions().Commit, "to", rebaseTarget, "incremental", incremental)
+	logger.Info("attempting to rebase pacakge",
+		"pkg", rb.Package.Name,
+		"from", pkg.Chart.Upstream.GetOptions(),
+		"to", delta.Apply(pkg.Chart.Upstream.GetOptions()),
+		"incremental", incremental,
+	)
 
 	if err := rb.Rebase(); err != nil {
 		return err
@@ -260,7 +274,7 @@ func main() {
 				Name:      "rebase",
 				Action:    pkgRebase,
 				Usage:     "Rebase a chart to a new version of the base chart",
-				UsageText: "chart-utils rebase [options] <commit|url>",
+				UsageText: "chart-utils rebase [options]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "increment",
@@ -269,6 +283,21 @@ func main() {
 					&cli.BoolFlag{
 						Name:  "backup",
 						Usage: "create a backup of the package working dir after each upstream is merged",
+					},
+					&cli.StringFlag{
+						Name:     "commit",
+						Usage:    "the commit to rebase to",
+						Category: CategoryUpstreamSpec,
+					},
+					&cli.StringFlag{
+						Name:     "url",
+						Usage:    "the URL of the upstream repository to rebase to",
+						Category: CategoryUpstreamSpec,
+					},
+					&cli.StringFlag{
+						Name:     "subdirectory",
+						Usage:    "the subdirectory of the upstream repository to rebase to",
+						Category: CategoryUpstreamSpec,
 					},
 				},
 			},

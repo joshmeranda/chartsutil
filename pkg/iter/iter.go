@@ -6,8 +6,28 @@ import (
 	"io"
 
 	"github.com/rancher/charts-build-scripts/pkg/charts"
+	"github.com/rancher/charts-build-scripts/pkg/options"
 	"github.com/rancher/charts-build-scripts/pkg/puller"
 )
+
+// UpstreamDelta showing the changes to make when creating the next upstreams in an iterator.
+type UpstreamDelta options.UpstreamOptions
+
+func (d *UpstreamDelta) Apply(opts options.UpstreamOptions) options.UpstreamOptions {
+	if d.Commit != nil {
+		opts.Commit = d.Commit
+	}
+
+	if d.URL != "" {
+		opts.URL = d.URL
+	}
+
+	if d.Subdirectory != nil {
+		opts.Subdirectory = d.Subdirectory
+	}
+
+	return opts
+}
 
 type ForEachFunc func(p puller.Puller) error
 
@@ -48,28 +68,21 @@ func (i *SingleIter) Next() (puller.Puller, error) {
 	return p, nil
 }
 
-func IterForUpstream(upstream puller.Puller, target string) (UpstreamIter, error) {
-	if target == "" {
-		return nil, fmt.Errorf("target cannot be empty")
+func IterForUpstream(upstream puller.Puller, delta UpstreamDelta) (UpstreamIter, error) {
+	if delta.Subdirectory != nil {
+		return nil, errors.New("incremental rebases do not support subdirectory changes")
 	}
 
 	switch u := upstream.(type) {
 	case puller.GithubRepository:
-		return NewGitIter(u.GetOptions(), target)
+		return NewGitIter(u.GetOptions(), delta)
 	default:
-		return NewSingleIter(upstream, target)
+		return NewSingleIter(upstream, delta)
 	}
 }
 
-func NewSingleIter(upstream puller.Puller, target string) (UpstreamIter, error) {
-	opts := upstream.GetOptions()
-
-	switch upstream.(type) {
-	case puller.GithubRepository:
-		opts.Commit = &target
-	default:
-		opts.URL = target
-	}
+func NewSingleIter(upstream puller.Puller, delta UpstreamDelta) (UpstreamIter, error) {
+	opts := delta.Apply(upstream.GetOptions())
 
 	p, err := charts.GetUpstream(opts)
 	if err != nil {

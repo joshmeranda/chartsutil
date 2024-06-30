@@ -153,9 +153,11 @@ func TestArchive(t *testing.T) {
 	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "chartsutil-example-archive")
 	_ = chartsDir
 
-	target := "https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz"
+	delta := iter.UpstreamDelta{
+		URL: "https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz",
+	}
 
-	iter, err := iter.NewSingleIter(pkg.Chart.Upstream, target)
+	iter, err := iter.NewSingleIter(pkg.Chart.Upstream, delta)
 	if err != nil {
 		t.Fatalf("failed to create single iterator: %v", err)
 	}
@@ -175,15 +177,15 @@ func TestArchive(t *testing.T) {
 	}
 
 	assertPackageMessage(t, repo, "Update package.yaml")
-	assertRebaseMessage(t, repo, "Updating chartsutil-example-archive to new base https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz")
+	assertRebaseMessage(t, repo, "Updating chartsutil-example-archive to new base "+delta.URL)
 
 	pkg, err = charts.GetPackage(rootFs, pkg.Name)
 	if err != nil {
 		t.Fatalf("failed to get package: %v", err)
 	}
 
-	if pkg.Chart.Upstream.GetOptions().URL != target {
-		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", target, pkg.Chart.Upstream.GetOptions().URL)
+	if pkg.Chart.Upstream.GetOptions().URL != delta.URL {
+		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", delta.URL, pkg.Chart.Upstream.GetOptions().URL)
 	}
 }
 
@@ -191,9 +193,12 @@ func TestGitIncremental(t *testing.T) {
 	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "chartsutil-example")
 	_ = chartsDir
 
-	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
+	newCommit := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
+	delta := iter.UpstreamDelta{
+		Commit: &newCommit,
+	}
 
-	iter, err := iter.NewGitIter(pkg.Chart.Upstream.GetOptions(), target)
+	iter, err := iter.NewGitIter(pkg.Chart.Upstream.GetOptions(), delta)
 	if err != nil {
 		t.Fatalf("failed to create git iterator: %v", err)
 	}
@@ -220,8 +225,8 @@ func TestGitIncremental(t *testing.T) {
 		t.Fatalf("failed to get package: %v", err)
 	}
 
-	if *pkg.Chart.Upstream.GetOptions().Commit != target {
-		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", target, *pkg.Chart.Upstream.GetOptions().Commit)
+	if *pkg.Chart.Upstream.GetOptions().Commit != *delta.Commit {
+		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", *delta.Commit, *pkg.Chart.Upstream.GetOptions().Commit)
 	}
 }
 
@@ -229,9 +234,12 @@ func TestGitNonIncremental(t *testing.T) {
 	chartsDir, logger, repo, pkg, rootFs, pkgFs := setupRebase(t, "chartsutil-example")
 	_ = chartsDir
 
-	target := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
+	newCommit := "933d8b2975efa50cda4dca6234e5e522b8f58cdc"
+	delta := iter.UpstreamDelta{
+		Commit: &newCommit,
+	}
 
-	iter, err := iter.NewSingleIter(pkg.Chart.Upstream, target)
+	iter, err := iter.NewSingleIter(pkg.Chart.Upstream, delta)
 	if err != nil {
 		t.Fatalf("failed to create single iterator: %v", err)
 	}
@@ -258,7 +266,7 @@ func TestGitNonIncremental(t *testing.T) {
 		t.Fatalf("failed to get package: %v", err)
 	}
 
-	if *pkg.Chart.Upstream.GetOptions().Commit != target {
-		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", target, *pkg.Chart.Upstream.GetOptions().Commit)
+	if *pkg.Chart.Upstream.GetOptions().Commit != *delta.Commit {
+		t.Errorf("commit does not match expected value:\nExpected: '%s'\n   Found: '%s'", *delta.Commit, *pkg.Chart.Upstream.GetOptions().Commit)
 	}
 }

@@ -20,11 +20,13 @@ import (
 type GitIter struct {
 	// UpstreamOptions are the options for the current package.
 	UpstreamOptions options.UpstreamOptions
+	Delta           UpstreamDelta
 
 	fromCommit plumbing.Hash
 	toCommit   plumbing.Hash
 
-	commits []*object.Commit
+	// commits []*object.Commit
+	deltas []UpstreamDelta
 
 	repo   *git.Repository
 	repoWt *git.Worktree
@@ -32,21 +34,21 @@ type GitIter struct {
 	isInit bool
 }
 
-func NewGitIter(opts options.UpstreamOptions, toCommit string) (*GitIter, error) {
-	iter := &GitIter{
-		UpstreamOptions: opts,
-	}
-
+func NewGitIter(opts options.UpstreamOptions, delta UpstreamDelta) (*GitIter, error) {
 	if opts.Commit == nil {
 		return nil, fmt.Errorf("upstream must have an initial commit")
 	}
 
-	if toCommit == "" {
-		return nil, fmt.Errorf("to commit must be specified")
+	if delta.Subdirectory != nil {
+		return nil, fmt.Errorf("subdirectory is not supported for git iter")
+	}
+
+	iter := &GitIter{
+		UpstreamOptions: opts,
 	}
 
 	iter.fromCommit = plumbing.NewHash(*opts.Commit)
-	iter.toCommit = plumbing.NewHash(toCommit)
+	iter.toCommit = plumbing.NewHash(*delta.Commit)
 
 	return iter, nil
 }
@@ -103,12 +105,20 @@ func (i *GitIter) init() error {
 		return fmt.Errorf("failed to get commit iterator: %w", err)
 	}
 
-	i.commits = make([]*object.Commit, 0)
+	i.deltas = make([]UpstreamDelta, 0)
 	commitIter.ForEach(func(c *object.Commit) error {
-		i.commits = append(i.commits, c)
+		delta := i.Delta
+
+		hash := c.Hash.String()
+		delta.Commit = &hash
+
+		i.deltas = append(i.deltas, delta)
+
 		return nil
 	})
+
 	i.isInit = true
+
 	return nil
 }
 
@@ -119,26 +129,23 @@ func (i *GitIter) Next() (puller.Puller, error) {
 		}
 	}
 
-	if len(i.commits) == 0 {
+	if len(i.deltas) == 0 {
 		return nil, io.EOF
 	}
 
-	commitStr := i.commits[len(i.commits)-1].Hash.String()
-	i.commits = i.commits[:len(i.commits)-1]
+	// deltas are stored in reverse order
+	delta := i.deltas[len(i.deltas)-1]
+	i.deltas = i.deltas[:len(i.deltas)-1]
 
 	p := &CheckoutPuller{
-		Wt: i.repoWt,
-		Opts: options.UpstreamOptions{
-			URL:          i.UpstreamOptions.URL,
-			Subdirectory: i.UpstreamOptions.Subdirectory,
-			Commit:       &commitStr,
-		},
+		Wt:   i.repoWt,
+		Opts: delta.Apply(i.UpstreamOptions),
 	}
 
 	return p, nil
 }
 
-func shouldSkip(srcinfo os.FileInfo, src, dest string) (bool, error) {
+func shouldSkipCommit(srcinfo os.FileInfo, src, dest string) (bool, error) {
 	if filepath.Base(src) == ".git" {
 		return true, nil
 	}
@@ -169,7 +176,7 @@ func (p *CheckoutPuller) Pull(rootFs billy.Filesystem, fs billy.Filesystem, path
 
 	dst := filesystem.GetAbsPath(fs, path)
 
-	if err := cp.Copy(src, dst, cp.Options{Skip: shouldSkip}); err != nil {
+	if err := cp.Copy(src, dst, cp.Options{Skip: shouldSkipCommit}); err != nil {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 

@@ -26,8 +26,11 @@ func TestNewGitIter(t *testing.T) {
 		URL:    "https://github.com/joshmeranda/chartsutil-example-upstream.git",
 		Commit: rebase.ToPtr("d71e29b3f50fbe2ff4d3c2dd95684739b4d00310"),
 	}
+	delta := iter.UpstreamDelta{
+		Commit: rebase.ToPtr("933d8b2975efa50cda4dca6234e5e522b8f58cdc"),
+	}
 
-	iter, err := iter.NewGitIter(opts, "933d8b2975efa50cda4dca6234e5e522b8f58cdc")
+	iter, err := iter.NewGitIter(opts, delta)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
