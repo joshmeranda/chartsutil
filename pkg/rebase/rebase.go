@@ -48,9 +48,10 @@ const (
 )
 
 type Options struct {
-	Logger       *slog.Logger
-	Resolver     resolve.Resolver
-	EnableBackup bool
+	Logger            *slog.Logger
+	Resolver          resolve.Resolver
+	EnableBackup      bool
+	DisableValidators bool
 }
 
 type Rebase struct {
@@ -95,6 +96,17 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 		return nil, fmt.Errorf("failed to get HEAD: %w", err)
 	}
 
+	var validators []PackageValidateFunc
+	if opts.DisableValidators {
+		validators = []PackageValidateFunc{}
+	} else {
+		validators = []PackageValidateFunc{
+			ValidateWorktree,
+			ValidatePatternNotFoundFactory("<<<<<<< HEAD"),
+			ValidateHelmLint,
+		}
+	}
+
 	return &Rebase{
 		Options: opts,
 
@@ -107,11 +119,7 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 		chartsWt:     chartsWorktree,
 		startingHead: head.Hash(),
 
-		validators: []PackageValidateFunc{
-			ValidateWorktree,
-			ValidatePatternNotFoundFactory("<<<<<<< HEAD"),
-			ValidateHelmLint,
-		},
+		validators: validators,
 	}, nil
 }
 

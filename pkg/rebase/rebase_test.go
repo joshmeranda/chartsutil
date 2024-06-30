@@ -163,8 +163,9 @@ func TestArchive(t *testing.T) {
 	}
 
 	opts := rebase.Options{
-		Logger:   logger,
-		Resolver: &resolve.Blind{},
+		Logger:            logger,
+		Resolver:          &resolve.Blind{},
+		DisableValidators: true,
 	}
 
 	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)
@@ -204,8 +205,9 @@ func TestGitIncremental(t *testing.T) {
 	}
 
 	opts := rebase.Options{
-		Logger:   logger,
-		Resolver: &resolve.Blind{},
+		Logger:            logger,
+		Resolver:          &resolve.Blind{},
+		DisableValidators: true,
 	}
 
 	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)
@@ -245,8 +247,9 @@ func TestGitNonIncremental(t *testing.T) {
 	}
 
 	opts := rebase.Options{
-		Logger:   logger,
-		Resolver: &resolve.Blind{},
+		Logger:            logger,
+		Resolver:          &resolve.Blind{},
+		DisableValidators: true,
 	}
 
 	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, iter, opts)

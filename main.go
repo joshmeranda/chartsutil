@@ -284,6 +284,10 @@ func main() {
 						Name:  "backup",
 						Usage: "create a backup of the package working dir after each upstream is merged",
 					},
+					&cli.BoolFlag{
+						Name:  "no-validate",
+						Usage: "do not run validators after resolving upstream changes",
+					},
 					&cli.StringFlag{
 						Name:     "commit",
 						Usage:    "the commit to rebase to",
