@@ -82,8 +82,10 @@ func cloneChartsTo(path string) (*git.Repository, error) {
 func setupRebase(t *testing.T, pkgName string) (string, *slog.Logger, *git.Repository, *charts.Package, billy.Filesystem, billy.Filesystem) {
 	chartsDir := fmt.Sprintf("%s-charts", t.Name())
 	t.Cleanup(func() {
-		if err := os.RemoveAll(chartsDir); err != nil {
-			t.Fatalf("failed to remove temp dir: %v", err)
+		if !t.Failed() {
+			if err := os.RemoveAll(chartsDir); err != nil {
+				t.Fatalf("failed to remove temp dir: %v", err)
+			}
 		}
 	})
 
@@ -164,7 +166,7 @@ func TestArchive(t *testing.T) {
 
 	opts := rebase.Options{
 		Logger:            logger,
-		Resolver:          &resolve.Blind{},
+		Resolver:          &resolve.MergeResolver{Strategy: resolve.StrategyTheirs},
 		DisableValidators: true,
 	}
 
