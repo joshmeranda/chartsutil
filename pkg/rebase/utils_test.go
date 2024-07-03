@@ -83,7 +83,16 @@ func TestGetUpdateExpression(t *testing.T) {
 				Subdirectory: nil,
 				Commit:       rebase.ToPtr("SOME_COMMIT"),
 			},
-			Expect: ".commit=\"SOME_COMMIT\"",
+			Expect: ".url=\"https://github.com/joshmeranda/chartsutil-example-upstream.git\" | .commit=\"SOME_COMMIT\"",
+		},
+		{
+			Name: "GithubRepositoryWithSubdirectory",
+			UpstreamOpts: options.UpstreamOptions{
+				URL:          "https://github.com/joshmeranda/chartsutil-example-upstream.git",
+				Subdirectory: rebase.ToPtr("charts"),
+				Commit:       rebase.ToPtr("SOME_COMMIT"),
+			},
+			Expect: ".url=\"https://github.com/joshmeranda/chartsutil-example-upstream.git\" | .commit=\"SOME_COMMIT\" | .subdirectory=\"charts\"",
 		},
 		{
 			Name: "CheckoutPuller",
@@ -94,7 +103,7 @@ func TestGetUpdateExpression(t *testing.T) {
 					Commit:       rebase.ToPtr("SOME_COMMIT"),
 				},
 			},
-			Expect: ".commit=\"SOME_COMMIT\"",
+			Expect: ".url=\"https://github.com/joshmeranda/chartsutil-example-upstream.git\" | .commit=\"SOME_COMMIT\"",
 		},
 		{
 			Name: "Archive",

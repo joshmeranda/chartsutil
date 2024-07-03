@@ -12,6 +12,7 @@ func ToPtr[T any](t T) *T {
 	return &t
 }
 
+// todo: might not be needed with new upstream UpstreamDelta type
 func GetRelaventUpstreamChange(upstream puller.Puller) string {
 	opts := upstream.GetOptions()
 
@@ -31,16 +32,19 @@ func GetRelaventUpstreamChange(upstream puller.Puller) string {
 	}
 }
 
+// todo: should just replace everything or take an upstream delta
 func GetUpdateExpression(upstream puller.Puller) string {
 	opts := upstream.GetOptions()
 	updates := make([]string, 0, 3)
 
-	switch upstream.(type) {
+	updates = append(updates, fmt.Sprintf(".url=\"%s\"", opts.URL))
 
-	case puller.GithubRepository, *iter.CheckoutPuller:
+	if opts.Commit != nil {
 		updates = append(updates, fmt.Sprintf(".commit=\"%s\"", *opts.Commit))
-	default:
-		updates = append(updates, fmt.Sprintf(".url=\"%s\"", opts.URL))
+	}
+
+	if opts.Subdirectory != nil {
+		updates = append(updates, fmt.Sprintf(".subdirectory=\"%s\"", *opts.Subdirectory))
 	}
 
 	return strings.Join(updates, " | ")
