@@ -80,7 +80,11 @@ func cloneChartsTo(path string) (*git.Repository, error) {
 }
 
 func setupRebase(t *testing.T, pkgName string) (string, *slog.Logger, *git.Repository, *charts.Package, billy.Filesystem, billy.Filesystem) {
-	chartsDir := fmt.Sprintf("%s-charts", t.Name())
+	chartsDir, err := os.MkdirTemp(".", "chartsutil-test-"+t.Name()+"-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+
 	t.Cleanup(func() {
 		if !t.Failed() {
 			if err := os.RemoveAll(chartsDir); err != nil {

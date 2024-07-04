@@ -203,11 +203,14 @@ func (r *Rebase) handleUpstream(upstream puller.Puller) error {
 	r.Logger.Info("merging branch", "dir", cmd.Dir, "cmd", cmd.String())
 	output, err := cmd.CombinedOutput()
 
-	switch err.(type) {
-	case *exec.ExitError:
-		fmt.Println(string(output))
-	default:
-		return fmt.Errorf("could not run merge command '%s': %w", cmd.String(), err)
+	if err != nil {
+		switch err.(type) {
+		case *exec.ExitError:
+			fmt.Println(string(output))
+		default:
+			return fmt.Errorf("could not run merge command '%s': %w", cmd.String(), err)
+		}
+
 	}
 
 	r.Logger.Info("could not merge automatically, running resolver")
@@ -338,7 +341,7 @@ func (r *Rebase) Rebase() error {
 		err := iter.ForEach(r.Iter, func(p puller.Puller) error {
 			defer func() {
 				if err := backup.Backup(); err != nil {
-					r.Logger.Warn("failed to backup charts: %w", err)
+					r.Logger.Warn("failed to backup charts", "err", err)
 				}
 			}()
 
@@ -386,6 +389,10 @@ func (r *Rebase) Rebase() error {
 		return err
 	}
 
+	if len(cherryPickCommits) == 0 {
+		return fmt.Errorf("no commits to cherry-pick")
+	}
+
 	// sleep via https://github.com/go-git/go-git/issues/37#issuecomment-1360057685
 	r.Logger.Info("letting git catch up...")
 	time.Sleep(time.Second * 2)
@@ -395,9 +402,16 @@ func (r *Rebase) Rebase() error {
 	cmd := exec.Command("git", cherryPickArgs...)
 	cmd.Dir = r.PkgFs.Root()
 
-	if out, err := cmd.CombinedOutput(); err != nil {
-		fmt.Println(string(out))
-		return fmt.Errorf("failed to cherry-pick changes: %w", err)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		switch err.(type) {
+		case *exec.ExitError:
+			fmt.Println(string(out))
+			return fmt.Errorf("failed to cherry-pick changes: %w", err)
+		default:
+			return fmt.Errorf("could not cherry-pick changes: %w", err)
+		}
+
 	}
 
 	return nil
