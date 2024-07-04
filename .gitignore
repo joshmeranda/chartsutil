@@ -32,7 +32,7 @@ go.work
 # Program generated files and directories
 .rebase-backup
 .test-cache
-*-charts
+pkg/rebase/chartsutil-test-*
 
 # Generated files
 bin
