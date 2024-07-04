@@ -33,6 +33,8 @@ const (
 
 var (
 	logger *slog.Logger
+
+	Version = "v0.0.0"
 )
 
 func setup(ctx *cli.Context) error {
@@ -217,15 +219,19 @@ func upstreamCheck(ctx *cli.Context) error {
 
 func main() {
 	app := cli.App{
-		Name: "chart-utils",
+		Name:    "chart-utils",
+		Version: Version,
+		Before:  setup,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "charts-dir",
+				Usage:   "Working directory for chart operations",
 				Value:   ".",
 				EnvVars: []string{EnvChartsDir},
 			},
 			&cli.StringFlag{
 				Name:     "package",
+				Usage:    "The target package for chartsutils operations",
 				EnvVars:  []string{EnvPackage},
 				Required: true,
 			},
@@ -239,10 +245,10 @@ func main() {
 				Category: CategoryVerbosity,
 			},
 		},
-		Before: setup,
 		Commands: []*cli.Command{
 			{
-				Name: "upstream",
+				Name:        "upstream",
+				Description: "commands for interacting with upstream repositories",
 				Subcommands: []*cli.Command{
 					{
 						Name:        "check",
@@ -309,7 +315,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		logger.Error(err.Error())
+		fmt.Printf("Error: %s\n", err.Error())
 		os.Exit(1)
 	}
 }
