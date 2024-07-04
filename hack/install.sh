@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 VERSION_FILE=scripts/version
-BINDIR=${BINDIR:-./bin}
+BINDIR=${BINDIR:-$(realpath ./bin)}
 
 if [ -z "$VERSION" ]; then
 	if [ -z "$CHARTS_BUILD_SCRIPT_VERSION" ]; then
@@ -23,6 +23,10 @@ if [ -z "$VERSION" ]; then
 fi
 
 echo "Installing chartsutils into ${BINDIR}"
-GOBIN="${BINDIR}" go install "github.com/joshmeranda/chartsutil@${VERSION}"
+git clone --branch "${VERSION}" git@github.com:joshmeranda/chartsutil.git .chartsutil-src &>/dev/null
+cd .chartsutil-src
+GOBIN="${BINDIR}" go install .
+cd ..
+rm --recursive --force .chartsutil-src
 
 ${BINDIR}/chartsutil --version

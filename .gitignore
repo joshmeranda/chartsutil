@@ -33,3 +33,6 @@ go.work
 .rebase-backup
 .test-cache
 *-charts
+
+# Generated files
+bin
