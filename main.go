@@ -121,8 +121,8 @@ func pkgRebase(ctx *cli.Context) error {
 
 	logger.Info("attempting to rebase pacakge",
 		"pkg", rb.Package.Name,
-		"from", pkg.Chart.Upstream.GetOptions(),
-		"to", delta.Apply(pkg.Chart.Upstream.GetOptions()),
+		"from", rebase.UpstreamRef(pkg.Chart.Upstream.GetOptions()),
+		"to", rebase.UpstreamRef(delta.Apply(pkg.Chart.Upstream.GetOptions())),
 		"incremental", incremental,
 	)
 

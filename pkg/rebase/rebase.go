@@ -174,7 +174,7 @@ resolveLoop:
 }
 
 func (r *Rebase) handleUpstream(upstream puller.Puller) error {
-	r.Logger.Info("bringing charts to next upstream", "upstream", upstream.GetOptions())
+	r.Logger.Info("bringing charts to next upstream", "upstream", UpstreamRef(upstream.GetOptions()))
 
 	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName, r.startingHead); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
@@ -232,7 +232,7 @@ func (r *Rebase) updatePatches(upstream puller.Puller) (plumbing.Hash, error) {
 
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
-	hash, err := Commit(r.chartsWt, true, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, upstream.GetOptions()), patchDir)
+	hash, err := Commit(r.chartsWt, true, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, GetRelaventUpstreamChange(upstream)), patchDir)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit patch changes: %w", err)
 	}

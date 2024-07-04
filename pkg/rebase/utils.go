@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/joshmeranda/chartsutil/pkg/iter"
+	"github.com/rancher/charts-build-scripts/pkg/options"
 	"github.com/rancher/charts-build-scripts/pkg/puller"
 )
 
@@ -12,7 +13,6 @@ func ToPtr[T any](t T) *T {
 	return &t
 }
 
-// todo: might not be needed with new upstream UpstreamDelta type
 func GetRelaventUpstreamChange(upstream puller.Puller) string {
 	opts := upstream.GetOptions()
 
@@ -30,6 +30,22 @@ func GetRelaventUpstreamChange(upstream puller.Puller) string {
 
 		return opts.URL
 	}
+}
+
+func UpstreamRef(upstream options.UpstreamOptions) string {
+	b := strings.Builder{}
+
+	b.WriteString(upstream.URL)
+
+	if upstream.Commit != nil {
+		b.WriteString(fmt.Sprintf("@%s", *upstream.Commit))
+	}
+
+	if upstream.Subdirectory != nil {
+		b.WriteString(fmt.Sprintf(":%s", *upstream.Subdirectory))
+	}
+
+	return b.String()
 }
 
 // todo: should just replace everything or take an upstream delta

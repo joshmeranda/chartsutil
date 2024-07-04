@@ -67,6 +67,51 @@ func TestGetRelevantUpstreamChange(t *testing.T) {
 	}
 }
 
+func TestUpstreamRef(t *testing.T) {
+	type testCase struct {
+		Name         string
+		UpstreamOpts options.UpstreamOptions
+		Expect       string
+	}
+
+	cases := []testCase{
+		{
+			Name: "GithubRepository",
+			UpstreamOpts: options.UpstreamOptions{
+				URL:          "https://github.com/joshmeranda/chartsutil-example-upstream.git",
+				Subdirectory: nil,
+				Commit:       rebase.ToPtr("SOME_COMMIT"),
+			},
+			Expect: "https://github.com/joshmeranda/chartsutil-example-upstream.git@SOME_COMMIT",
+		},
+		{
+			Name: "CheckoutPuller",
+			UpstreamOpts: options.UpstreamOptions{
+				URL:          "https://github.com/joshmeranda/chartsutil-example-upstream.git",
+				Subdirectory: nil,
+				Commit:       rebase.ToPtr("SOME_COMMIT"),
+			},
+			Expect: "https://github.com/joshmeranda/chartsutil-example-upstream.git@SOME_COMMIT",
+		},
+		{
+			Name: "Archive",
+			UpstreamOpts: options.UpstreamOptions{
+				URL: "https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz",
+			},
+			Expect: "https://github.com/joshmeranda/chartsutil-example-upstream/archive/refs/tags/v0.0.1.tar.gz",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			actual := rebase.UpstreamRef(c.UpstreamOpts)
+			if actual != c.Expect {
+				t.Errorf("expected %q, got %q", c.Expect, actual)
+			}
+		})
+	}
+}
+
 func TestGetUpdateExpression(t *testing.T) {
 	type testCase struct {
 		Name         string
