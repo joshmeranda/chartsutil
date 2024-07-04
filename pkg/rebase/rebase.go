@@ -163,14 +163,18 @@ resolveLoop:
 			}
 		}
 
+		r.Logger.Info("worktree has passed all validators")
+
 		break
 	}
+
+	r.Logger.Info("all conflicts resolved!")
 
 	return nil
 }
 
 func (r *Rebase) handleUpstream(upstream puller.Puller) error {
-	r.Logger.Info("bringing charts to commit", "commit", GetRelaventUpstreamChange(upstream))
+	r.Logger.Info("bringing charts to next upstream", "upstream", upstream.GetOptions())
 
 	if err := CreateBranch(r.chartsRepo, ChartsStagingBranchName, r.startingHead); err != nil {
 		return fmt.Errorf("failed to create staging branch: %w", err)
@@ -196,10 +200,14 @@ func (r *Rebase) handleUpstream(upstream puller.Puller) error {
 	cmd := exec.Command("git", "merge", "--squash", "--no-commit", ChartsStagingBranchName)
 	cmd.Dir = r.RootFs.Root()
 
-	r.Logger.Info("merging branch", "cmd", cmd.String(), "dir", cmd.Dir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// return fmt.Errorf("failed to merge branch %s: %s", CHARTS_STAGING_BRANCH_NAME, output)
+	r.Logger.Info("merging branch", "dir", cmd.Dir, "cmd", cmd.String())
+	output, err := cmd.CombinedOutput()
+
+	switch err.(type) {
+	case *exec.ExitError:
 		fmt.Println(string(output))
+	default:
+		return fmt.Errorf("could not run merge command '%s': %w", cmd.String(), err)
 	}
 
 	r.Logger.Info("could not merge automatically, running resolver")
@@ -215,7 +223,7 @@ func (r *Rebase) handleUpstream(upstream puller.Puller) error {
 	return nil
 }
 
-func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
+func (r *Rebase) updatePatches(upstream puller.Puller) (plumbing.Hash, error) {
 	r.Logger.Info("generating patch")
 
 	if err := r.Package.GeneratePatch(); err != nil {
@@ -224,7 +232,7 @@ func (r *Rebase) updatePatches(whatChanged string) (plumbing.Hash, error) {
 
 	patchDir := path.Join("packages", r.Package.Name, "generated-changes")
 
-	hash, err := Commit(r.chartsWt, true, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, whatChanged), patchDir)
+	hash, err := Commit(r.chartsWt, true, fmt.Sprintf("Updating %s to new base %s", r.Package.Name, upstream.GetOptions()), patchDir)
 	if err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("failed to commit patch changes: %w", err)
 	}
@@ -255,7 +263,7 @@ func (r *Rebase) updatePackageYaml(upstream puller.Puller) (plumbing.Hash, error
 
 	expression := GetUpdateExpression(upstream)
 
-	r.Logger.Debug("updating package.yaml", "expr", expression)
+	r.Logger.Info("updating package.yaml", "expr", expression)
 
 	allAtOnceEvaluator := yqlib.NewAllAtOnceEvaluator()
 	if err := allAtOnceEvaluator.EvaluateFiles(expression, []string{pkgFile}, printer, decoder); err != nil {
@@ -354,7 +362,7 @@ func (r *Rebase) Rebase() error {
 			return fmt.Errorf("failed to update package.yaml: %w", err)
 		}
 
-		if _, err = r.updatePatches(GetRelaventUpstreamChange(last)); err != nil {
+		if _, err = r.updatePatches(last); err != nil {
 			return fmt.Errorf("failed to generate patch: %w", err)
 		}
 
