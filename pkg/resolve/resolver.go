@@ -43,3 +43,9 @@ func (b Blind) Resolve(wt *git.Worktree) error {
 
 	return nil
 }
+
+type NoopResolver struct{}
+
+func (n NoopResolver) Resolve(*git.Worktree) error {
+	return nil
+}
