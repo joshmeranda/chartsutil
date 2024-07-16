@@ -285,6 +285,17 @@ func (r *Rebase) updatePackageYaml(upstream puller.Puller) (plumbing.Hash, error
 	return hash, nil
 }
 
+func (r *Rebase) reloadPackage() error {
+	pkg, err := charts.GetPackage(r.RootFs, r.Package.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get package: %w", err)
+	}
+
+	r.Package = pkg
+
+	return nil
+}
+
 func (r *Rebase) Rebase() error {
 	isClean, err := IsWorktreeClean(r.chartsWt)
 	if err != nil {
@@ -363,6 +374,10 @@ func (r *Rebase) Rebase() error {
 
 		if _, err = r.updatePackageYaml(last); err != nil {
 			return fmt.Errorf("failed to update package.yaml: %w", err)
+		}
+
+		if err := r.reloadPackage(); err != nil {
+			return fmt.Errorf("failed to update package: %w", err)
 		}
 
 		if _, err = r.updatePatches(last); err != nil {
