@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	"github.com/rancher/charts-build-scripts/pkg/options"
@@ -13,20 +14,24 @@ import (
 // UpstreamDelta showing the changes to make when creating the next upstreams in an iterator.
 type UpstreamDelta options.UpstreamOptions
 
-func (d *UpstreamDelta) Apply(opts options.UpstreamOptions) options.UpstreamOptions {
-	if d.Commit != nil {
-		opts.Commit = d.Commit
-	}
-
+func (d *UpstreamDelta) Apply(opts options.UpstreamOptions) (options.UpstreamOptions, error) {
 	if d.URL != "" {
 		opts.URL = d.URL
+	}
+
+	if d.Commit != nil {
+		if !strings.HasSuffix(opts.URL, ".git") {
+			return opts, fmt.Errorf("cannot apply delta with commit to non-git upstream")
+		}
+
+		opts.Commit = d.Commit
 	}
 
 	if d.Subdirectory != nil {
 		opts.Subdirectory = d.Subdirectory
 	}
 
-	return opts
+	return opts, nil
 }
 
 type ForEachFunc func(p puller.Puller) error
@@ -82,7 +87,10 @@ func IterForUpstream(upstream puller.Puller, delta UpstreamDelta) (UpstreamIter,
 }
 
 func NewSingleIter(upstream puller.Puller, delta UpstreamDelta) (UpstreamIter, error) {
-	opts := delta.Apply(upstream.GetOptions())
+	opts, err := delta.Apply(upstream.GetOptions())
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply upstream delta: %w", err)
+	}
 
 	p, err := charts.GetUpstream(opts)
 	if err != nil {

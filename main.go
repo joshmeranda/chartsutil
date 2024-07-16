@@ -121,10 +121,15 @@ func pkgRebase(ctx *cli.Context) error {
 		return fmt.Errorf("invalid rebaser spec: %w", err)
 	}
 
+	newOpts, err := delta.Apply(pkg.Chart.Upstream.GetOptions())
+	if err != nil {
+		return fmt.Errorf("failed to apply upstream delta: %w", err)
+	}
+
 	logger.Info("attempting to rebase pacakge",
 		"pkg", rb.Package.Name,
 		"from", rebase.UpstreamRef(pkg.Chart.Upstream.GetOptions()),
-		"to", rebase.UpstreamRef(delta.Apply(pkg.Chart.Upstream.GetOptions())),
+		"to", rebase.UpstreamRef(newOpts),
 		"incremental", incremental,
 	)
 

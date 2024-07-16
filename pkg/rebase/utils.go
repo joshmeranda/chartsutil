@@ -42,7 +42,7 @@ func UpstreamRef(upstream options.UpstreamOptions) string {
 	}
 
 	if upstream.Subdirectory != nil {
-		b.WriteString(fmt.Sprintf(":%s", *upstream.Subdirectory))
+		b.WriteString(fmt.Sprintf("/%s", strings.TrimLeft(*upstream.Subdirectory, "/")))
 	}
 
 	return b.String()

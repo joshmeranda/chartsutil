@@ -137,9 +137,14 @@ func (i *GitIter) Next() (puller.Puller, error) {
 	delta := i.deltas[len(i.deltas)-1]
 	i.deltas = i.deltas[:len(i.deltas)-1]
 
+	newOpts, err := delta.Apply(i.UpstreamOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply upstream delta: %w", err)
+	}
+
 	p := &CheckoutPuller{
 		Wt:   i.repoWt,
-		Opts: delta.Apply(i.UpstreamOptions),
+		Opts: newOpts,
 	}
 
 	return p, nil
