@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -229,6 +230,7 @@ func imagesMirror(ctx *cli.Context) error {
 	pkgName := ctx.String("package")
 	chartsDir := ctx.String("charts-dir")
 	rootFs := filesystem.GetFilesystem(chartsDir)
+	imagesListUrl := ctx.String("images-list")
 
 	pkg, err := charts.GetPackage(rootFs, pkgName)
 	if err != nil {
@@ -247,7 +249,30 @@ func imagesMirror(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("=== [imagesMirror] 000 %v ===", imageMap)
+	resp, err := http.Get(imagesListUrl)
+	if err != nil {
+		return fmt.Errorf("failed to fetch images list: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read images list: %w", err)
+	}
+
+	mirrors, err := images.UnmarshalImagesList(data)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal images list: %w", err)
+	}
+
+	newMirrors, err := images.GetMissingMirrorRefs(imageMap, mirrors)
+	if err != nil {
+		return fmt.Errorf("failed to get missing mirrors: %w", err)
+	}
+
+	for _, mirror := range newMirrors {
+		fmt.Println(mirror)
+	}
 
 	return nil
 }
@@ -353,6 +378,13 @@ func main() {
 						Name:   "mirror",
 						Usage:  "Get a list of images from a package which cannot be found in rancher/image-mirror",
 						Action: imagesMirror,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  "images-list",
+								Usage: "URL to the images list file",
+								Value: ImageMirrorFileUrl,
+							},
+						},
 					},
 				},
 			},

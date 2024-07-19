@@ -79,23 +79,25 @@ func TestGetImagesFromValuesContent(t *testing.T) {
 
 func TestRepositoryInNamespace(t *testing.T) {
 	type TestCase struct {
+		Name        string
 		Repository  string
 		Namespace   string
 		InNamespace bool
 	}
 
 	cases := []TestCase{
-		{"rancher/rancher", "rancher", true},
-		{"rancher/rancher", "upstream", false},
-		{"upstream/component", "rancher", false},
+		{"InNamespace", "rancher/rancher", "rancher", true},
+		{"NotInNamespace", "rancher/rancher", "upstream", false},
 
-		{"some.registry/rancher/rancher", "rancher", true},
-		{"some.registry/upstream/component", "rancher", false},
+		{"InNamespaceWithRegistry", "some.registry/rancher/rancher", "rancher", true},
+		{"NotInNamespaceWithRegistry", "some.registry/upstream/component", "rancher", false},
 	}
 
 	for _, c := range cases {
-		if images.RepositoryInNamespace(c.Repository, c.Namespace) != c.InNamespace {
-			t.Errorf("expected '%v' in namespace '%v' to be %v", c.Repository, c.Namespace, c.InNamespace)
-		}
+		t.Run(c.Name, func(t *testing.T) {
+			if images.RepositoryInNamespace(c.Repository, c.Namespace) != c.InNamespace {
+				t.Errorf("expected '%v' in namespace '%v' to be %v", c.Repository, c.Namespace, c.InNamespace)
+			}
+		})
 	}
 }
