@@ -143,7 +143,7 @@ func TestGetMissingMirrors(t *testing.T) {
 		{Source: "upstream/something-new", Destination: "rancher/mirrored-upstream-something-new", Tag: "v0.0.0"},
 	}
 
-	actual, err := images.GetMissingMirrorRefs(imageList, mirrors)
+	actual, err := images.GetMissingMirrorRefs("rancher", imageList, mirrors)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err.Error())
 	}

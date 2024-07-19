@@ -265,7 +265,7 @@ func imagesMirror(ctx *cli.Context) error {
 		return fmt.Errorf("failed to unmarshal images list: %w", err)
 	}
 
-	newMirrors, err := images.GetMissingMirrorRefs(imageMap, mirrors)
+	newMirrors, err := images.GetMissingMirrorRefs("rancher", imageMap, mirrors)
 	if err != nil {
 		return fmt.Errorf("failed to get missing mirrors: %w", err)
 	}

@@ -72,7 +72,7 @@ func MirrorForImage(namespace string, repository string, tag string) (MirrorRef,
 }
 
 // todo: should support different namespaces
-func GetMissingMirrorRefs(images ImageList, mirrors []MirrorRef) ([]MirrorRef, error) {
+func GetMissingMirrorRefs(namespace string, images ImageList, mirrors []MirrorRef) ([]MirrorRef, error) {
 	var newMirrors []MirrorRef
 
 	for repository, tags := range images {
@@ -86,7 +86,7 @@ func GetMissingMirrorRefs(images ImageList, mirrors []MirrorRef) ([]MirrorRef, e
 			}
 
 			if missing {
-				newMirror, err := MirrorForImage("rancher", repository, tag)
+				newMirror, err := MirrorForImage(namespace, repository, tag)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create mirror for source: %w", err)
 				}
