@@ -7,72 +7,41 @@ import (
 	"github.com/joshmeranda/chartsutil/pkg/images"
 )
 
-var content []byte = []byte(`
-name: some-app
-port: 8080
-
-image:
-  repository: rancher/rancher
-  tag: v2.9.0
-
-tolerations: []
-taints: []
-
-oldImages:
-  - repository: rancher/rancher
-    tag: v2.8.0
-  - repository: rancher/rancher
-    tag: v2.7.0
-  - repository: rancher/rancher
-    tag: v2.6.0
-  - repository: rancher/rancher
-    tag: v2.5.0
-
-subComponent:
-  image:
-    repository: upstream/subcomponent
-    tag: ""
-
-subSubComponent:
-  image:
-    repository: upstream/subsubcomponent
-    tag: ""
-`)
-
-func assertImageMaps(t *testing.T, actual, expected map[string][]string) {
+func assertImagesList(t *testing.T, expected, actual []images.MirrorRef) {
 	t.Helper()
-	if len(actual) != len(expected) {
-		t.Errorf("actual does not match expected:\nExpected: %v\n  Actual: %v", expected, actual)
-		return
+
+	if len(expected) != len(actual) {
+		t.Errorf("expected %d images, got %d", len(expected), len(actual))
 	}
 
-	for ek, ev := range expected {
-		av, ok := actual[ek]
-		if !ok {
-			t.Errorf("actual does not match expected:\nExpected: %v\n  Actual: %v", expected, actual)
-		}
-
-		slices.Sort(ev)
-		slices.Sort(av)
-
-		if !slices.Equal(ev, av) {
-			t.Errorf("actual does not match expected:\nExpected: %v\n  Actual: %v", expected, actual)
+	for _, expectedImage := range expected {
+		if !slices.Contains(actual, expectedImage) {
+			t.Errorf("expected image %v not found in actual list:\nexpected: %v\n  actual: %v", expectedImage, expected, actual)
 			return
 		}
 	}
 }
 
-func TestGetImagesFromValuesContent(t *testing.T) {
-	imageMap, err := images.GetImagesFromValuesContent(content)
+func TestMarshalImagesList(t *testing.T) {
+	data := []byte(`# this is a comment that should be ignored
+rancher/rancher rancher/mirrored-rancher-rancher v2.9.0
+library/busybox rancher/mirrored-library-busybox 1.36.1
+
+quay.io/coreos/prometheus-operator rancher/mirrored-coreos-prometheus-operator v0.40.0
+registry.k8s.io/metrics-server/metrics-server rancher/mirrored-metrics-server v0.7.1
+`)
+
+	list, err := images.MarshalImagesList(data)
 	if err != nil {
-		t.Error("unexpected error:", err)
+		t.Errorf("recevied unexpected error marshing data: %s", err.Error())
 	}
 
-	expected := map[string][]string{
-		"rancher/rancher":          {"v2.9.0", "v2.8.0", "v2.7.0", "v2.6.0", "v2.5.0"},
-		"upstream/subcomponent":    {""},
-		"upstream/subsubcomponent": {""},
+	expected := []images.MirrorRef{
+		{Source: "rancher/rancher", Destination: "rancher/mirrored-rancher-rancher", Tag: "v2.9.0"},
+		{Source: "library/busybox", Destination: "rancher/mirrored-library-busybox", Tag: "1.36.1"},
+		{Source: "quay.io/coreos/prometheus-operator", Destination: "rancher/mirrored-coreos-prometheus-operator", Tag: "v0.40.0"},
+		{Source: "registry.k8s.io/metrics-server/metrics-server", Destination: "rancher/mirrored-metrics-server", Tag: "v0.7.1"},
 	}
 
-	assertImageMaps(t, imageMap, expected)
+	assertImagesList(t, expected, list)
 }

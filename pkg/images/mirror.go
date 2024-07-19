@@ -1,63 +1,43 @@
 package images
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
-
-	"gopkg.in/yaml.v2"
 )
 
-func walkMap(m any, cb func(map[any]any)) {
-	switch value := m.(type) {
-	case map[any]any:
-		cb(value)
-
-		for _, v := range value {
-			walkMap(v, cb)
-		}
-	case []any:
-		for _, v := range value {
-			walkMap(v, cb)
-		}
-	}
+// MirrorRef is a struct that represents each mirror from the rancher/image-mirror images-list file.
+type MirrorRef struct {
+	// Source is the source image excluding the registry.
+	Source      string
+	Destination string
+	Tag         string
 }
 
-func GetImagesFromValuesContent(data []byte) (map[string][]string, error) {
-	var values map[any]any
-	if err := yaml.Unmarshal(data, &values); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal values file for chart: %w", err)
-	}
+func MarshalImagesList(data []byte) ([]MirrorRef, error) {
+	reader := bytes.NewReader(data)
+	scanner := bufio.NewScanner(reader)
 
-	images := make(map[string][]string)
+	out := make([]MirrorRef, 0)
 
-	walkMap(values, func(m map[any]any) {
-		repo, ok := m["repository"].(string)
-		if !ok {
-			return
+	for i := 1; scanner.Scan(); i++ {
+		line := scanner.Bytes()
+
+		if len(line) == 0 || bytes.HasPrefix(line, []byte("#")) {
+			continue
 		}
 
-		tag, ok := m["tag"].(string)
-		if !ok {
-			return
+		components := bytes.Split(line, []byte(" "))
+		if len(components) != 3 {
+			return nil, fmt.Errorf("error line line %d: expected 3 fields but only found %d", i, len(components))
 		}
 
-		images[repo] = append(images[repo], tag)
-	})
-
-	return images, nil
-}
-
-func GetImagesFromValuesFile(path string) (map[string][]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read values file for chart: %w", err)
+		out = append(out, MirrorRef{
+			Source:      string(components[0]),
+			Destination: string(components[1]),
+			Tag:         string(components[2]),
+		})
 	}
 
-	return GetImagesFromValuesContent(data)
-}
-
-func GetImagesFromChart(path string) (map[string][]string, error) {
-	valuesFile := filepath.Join(path, "values.yaml")
-	return GetImagesFromValuesFile(valuesFile)
+	return out, nil
 }
