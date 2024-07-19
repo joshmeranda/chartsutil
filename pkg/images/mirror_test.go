@@ -7,7 +7,7 @@ import (
 	"github.com/joshmeranda/chartsutil/pkg/images"
 )
 
-func assertImagesList(t *testing.T, expected, actual []images.MirrorRef) {
+func assertImagesList(t *testing.T, expected []images.MirrorRef, actual []images.MirrorRef) {
 	t.Helper()
 
 	if len(expected) != len(actual) {

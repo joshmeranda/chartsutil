@@ -14,6 +14,10 @@ type MirrorRef struct {
 	Tag         string
 }
 
+func (r MirrorRef) String() string {
+	return fmt.Sprintf("%s %s %s", r.Source, r.Destination, r.Tag)
+}
+
 func MarshalImagesList(data []byte) ([]MirrorRef, error) {
 	reader := bytes.NewReader(data)
 	scanner := bufio.NewScanner(reader)

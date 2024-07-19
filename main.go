@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/joshmeranda/chartsutil/pkg/display"
+	"github.com/joshmeranda/chartsutil/pkg/images"
 	"github.com/joshmeranda/chartsutil/pkg/iter"
 	"github.com/joshmeranda/chartsutil/pkg/rebase"
 	"github.com/joshmeranda/chartsutil/pkg/release"
@@ -29,6 +30,8 @@ const (
 	CategoryPatternMatching = "Pattern Matching"
 	CategoryVerbosity       = "Verbosity"
 	CategoryUpstreamSpec    = "Upstream Specifications"
+
+	ImageMirrorFileUrl = "https://raw.githubusercontent.com/rancher/image-mirror/images-list"
 )
 
 var (
@@ -222,6 +225,33 @@ func upstreamCheck(ctx *cli.Context) error {
 	return nil
 }
 
+func imagesMirror(ctx *cli.Context) error {
+	pkgName := ctx.String("package")
+	chartsDir := ctx.String("charts-dir")
+	rootFs := filesystem.GetFilesystem(chartsDir)
+
+	pkg, err := charts.GetPackage(rootFs, pkgName)
+	if err != nil {
+		return err
+	}
+
+	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
+	if err != nil {
+		return fmt.Errorf("failed to chroot to package dir: %w", err)
+	}
+
+	chartPath := filepath.Join(pkgFs.Root(), pkg.WorkingDir)
+
+	imageMap, err := images.GetImagesFromChart(chartPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("=== [imagesMirror] 000 %v ===", imageMap)
+
+	return nil
+}
+
 func main() {
 	app := cli.App{
 		Name:    "chart-utils",
@@ -313,6 +343,16 @@ func main() {
 						Name:     "subdirectory",
 						Usage:    "the subdirectory of the upstream repository to rebase to",
 						Category: CategoryUpstreamSpec,
+					},
+				},
+			},
+			{
+				Name: "images",
+				Subcommands: []*cli.Command{
+					{
+						Name:   "mirror",
+						Usage:  "Get a list of images from a package which cannot be found in rancher/image-mirror",
+						Action: imagesMirror,
 					},
 				},
 			},

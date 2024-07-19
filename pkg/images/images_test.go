@@ -39,7 +39,7 @@ subSubComponent:
     tag: ""
 `)
 
-func assertImageMaps(t *testing.T, actual, expected map[string][]string) {
+func assertImageMaps(t *testing.T, actual images.ImageList, expected images.ImageList) {
 	t.Helper()
 	if len(actual) != len(expected) {
 		t.Errorf("actual does not match expected:\nExpected: %v\n  Actual: %v", expected, actual)
@@ -75,4 +75,27 @@ func TestGetImagesFromValuesContent(t *testing.T) {
 	}
 
 	assertImageMaps(t, imageMap, expected)
+}
+
+func TestRepositoryInNamespace(t *testing.T) {
+	type TestCase struct {
+		Repository  string
+		Namespace   string
+		InNamespace bool
+	}
+
+	cases := []TestCase{
+		{"rancher/rancher", "rancher", true},
+		{"rancher/rancher", "upstream", false},
+		{"upstream/component", "rancher", false},
+
+		{"some.registry/rancher/rancher", "rancher", true},
+		{"some.registry/upstream/component", "rancher", false},
+	}
+
+	for _, c := range cases {
+		if images.RepositoryInNamespace(c.Repository, c.Namespace) != c.InNamespace {
+			t.Errorf("expected '%v' in namespace '%v' to be %v", c.Repository, c.Namespace, c.InNamespace)
+		}
+	}
 }
