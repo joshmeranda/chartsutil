@@ -32,7 +32,7 @@ const (
 	CategoryVerbosity       = "Verbosity"
 	CategoryUpstreamSpec    = "Upstream Specifications"
 
-	ImageMirrorFileUrl = "https://raw.githubusercontent.com/rancher/image-mirror/images-list"
+	ImageMirrorFileUrl = "https://raw.githubusercontent.com/rancher/image-mirror/master/images-list"
 )
 
 var (
@@ -254,6 +254,10 @@ func imagesMirror(ctx *cli.Context) error {
 		return fmt.Errorf("failed to fetch images list: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch images list: %s", resp.Status)
+	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
