@@ -48,27 +48,27 @@ func UnmarshalImagesList(data []byte) ([]MirrorRef, error) {
 	return out, nil
 }
 
-func MirrorForImage(namespace string, repository string, tag string) (MirrorRef, error) {
+func MirrorForSource(namespace string, repository string, tag string) (MirrorRef, error) {
 	components := strings.Split(repository, "/")
+
+	var oldNamespace, name string
 
 	switch len(components) {
 	case 1:
 		return MirrorRef{}, fmt.Errorf("repository %s does not contain a namespace", repository)
 	case 2:
-		return MirrorRef{
-			Source:      repository,
-			Destination: fmt.Sprintf("%s/mirrored-%s-%s", namespace, components[0], components[1]),
-			Tag:         tag,
-		}, nil
+		oldNamespace, name = components[0], components[1]
 	case 3:
-		return MirrorRef{
-			Source:      repository,
-			Destination: fmt.Sprintf("%s/mirrored-%s-%s", namespace, components[1], components[2]),
-			Tag:         tag,
-		}, nil
+		oldNamespace, name = components[1], components[2]
 	default:
 		return MirrorRef{}, fmt.Errorf("repository '%s' has too many components", repository)
 	}
+
+	return MirrorRef{
+		Source:      repository,
+		Destination: fmt.Sprintf("%s/mirrored-%s-%s", namespace, oldNamespace, name),
+		Tag:         tag,
+	}, nil
 }
 
 // todo: should support different namespaces
@@ -78,17 +78,32 @@ func GetMissingMirrorRefs(namespace string, images ImageList, mirrors []MirrorRe
 	for repository, tags := range images {
 		for _, tag := range tags {
 			missing := true
+			var existingMirror *MirrorRef
+
 			for _, ref := range mirrors {
-				if ref.Source == repository && ref.Tag == tag {
+				if (ref.Source == repository || ref.Destination == repository) && ref.Tag == tag {
 					missing = false
+					break
+				}
+
+				if ref.Destination == repository {
+					existingMirror = &ref
 					break
 				}
 			}
 
 			if missing {
-				newMirror, err := MirrorForImage(namespace, repository, tag)
-				if err != nil {
-					return nil, fmt.Errorf("failed to create mirror for source: %w", err)
+				var newMirror MirrorRef
+				var err error
+
+				if existingMirror == nil {
+					newMirror, err = MirrorForSource(namespace, repository, tag)
+					if err != nil {
+						return nil, fmt.Errorf("failed to create mirror for source: %w", err)
+					}
+				} else {
+					newMirror = *existingMirror
+					newMirror.Tag = tag
 				}
 
 				newMirrors = append(newMirrors, newMirror)

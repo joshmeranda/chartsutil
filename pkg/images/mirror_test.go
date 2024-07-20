@@ -87,6 +87,13 @@ func TestMirrorForImage(t *testing.T) {
 			},
 		},
 		{
+			Name:       "AlreadyMirrored",
+			Repository: "rancher/mirrored-upstream-subcomponent",
+			Tag:        "v2.9.0",
+
+			Expected: images.MirrorRef{},
+		},
+		{
 			Name: "NoRepositoryNamespace",
 
 			Namespace:  "rancher",
@@ -108,7 +115,7 @@ func TestMirrorForImage(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.Name, func(t *testing.T) {
-			actual, err := images.MirrorForImage(c.Namespace, c.Repository, c.Tag)
+			actual, err := images.MirrorForSource(c.Namespace, c.Repository, c.Tag)
 			if err != nil {
 				if err.Error() != c.Error.Error() {
 					t.Errorf("did not receive the expected error:\nexpected: %v\n  actual: %v", c.Error, err)
@@ -124,10 +131,11 @@ func TestMirrorForImage(t *testing.T) {
 
 func TestGetMissingMirrors(t *testing.T) {
 	imageList := images.ImageList{
-		"rancher/rancher":          {"v2.9.0"},
-		"upstream/subcomponent":    {"v0.0.3"},
-		"upstream/subsubcomponent": {"v0.0.3"},
-		"upstream/something-new":   {"v0.0.0"},
+		"rancher/rancher":                        {"v2.9.0"},
+		"upstream/subcomponent":                  {"v0.0.3"},
+		"upstream/subsubcomponent":               {"v0.0.3"},
+		"upstream/something-new":                 {"v0.0.0"},
+		"rancher/mirrored-upstream-subcomponent": {"v0.0.4"},
 	}
 
 	mirrors := []images.MirrorRef{
@@ -141,6 +149,7 @@ func TestGetMissingMirrors(t *testing.T) {
 		{Source: "rancher/rancher", Destination: "rancher/mirrored-rancher-rancher", Tag: "v2.9.0"},
 		{Source: "upstream/subcomponent", Destination: "rancher/mirrored-upstream-subcomponent", Tag: "v0.0.3"},
 		{Source: "upstream/something-new", Destination: "rancher/mirrored-upstream-something-new", Tag: "v0.0.0"},
+		{Source: "upstream/subcomponent", Destination: "rancher/mirrored-upstream-subcomponent", Tag: "v0.0.4"},
 	}
 
 	actual, err := images.GetMissingMirrorRefs("rancher", imageList, mirrors)
