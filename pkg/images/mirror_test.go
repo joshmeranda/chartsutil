@@ -8,17 +8,40 @@ import (
 	"github.com/joshmeranda/chartsutil/pkg/images"
 )
 
-func assertMirrorRefSlice(t *testing.T, expected []images.MirrorRef, actual []images.MirrorRef) {
+func assertMirrorRef(t *testing.T, expected images.MirrorRef, actual images.MirrorRef) bool {
+	t.Helper()
+
+	if expected.Mirror != actual.Mirror {
+		t.Errorf("expected mirror %s, got %s", expected.Mirror, actual.Mirror)
+		return false
+	}
+
+	for _, expectedTag := range expected.Tags {
+		if !slices.Contains(actual.Tags, expectedTag) {
+			t.Errorf("expected mirror %s, got %s", expected.Mirror, actual.Mirror)
+			return false
+		}
+	}
+
+	return true
+}
+
+func assertMirrorList(t *testing.T, expected images.MirrorList, actual images.MirrorList) {
 	t.Helper()
 
 	if len(expected) != len(actual) {
 		t.Errorf("expected %d refs, got %d", len(expected), len(actual))
+		return
 	}
 
-	for _, expectedImage := range expected {
-		if !slices.Contains(actual, expectedImage) {
-			t.Errorf("expected image %v not found in actual list:\nexpected: %v\n  actual: %v", expectedImage, expected, actual)
-			return
+	for expectedImage, expectedRef := range expected {
+		actualImage, found := actual[expectedImage]
+		if !found {
+			t.Errorf("actual mirror list does not match expected:\nexpected: %v\n  actual: %v", expected, actual)
+		}
+
+		if !assertMirrorRef(t, expectedRef, actualImage) {
+			t.Errorf("actual mirror list does not match expected:\nexpected: %v\n  actual: %v", expected, actual)
 		}
 	}
 }
@@ -37,96 +60,65 @@ registry.k8s.io/metrics-server/metrics-server rancher/mirrored-metrics-server v0
 		t.Errorf("recevied unexpected error marshing data: %s", err.Error())
 	}
 
-	expected := []images.MirrorRef{
-		{Source: "rancher/rancher", Destination: "rancher/mirrored-rancher-rancher", Tag: "v2.9.0"},
-		{Source: "library/busybox", Destination: "rancher/mirrored-library-busybox", Tag: "1.36.1"},
-		{Source: "quay.io/coreos/prometheus-operator", Destination: "rancher/mirrored-coreos-prometheus-operator", Tag: "v0.40.0"},
-		{Source: "registry.k8s.io/metrics-server/metrics-server", Destination: "rancher/mirrored-metrics-server", Tag: "v0.7.1"},
+	expected := images.MirrorList{
+		"rancher/rancher":                               images.MirrorRef{Mirror: "rancher/mirrored-rancher-rancher", Tags: []string{"v2.9.0"}},
+		"library/busybox":                               images.MirrorRef{Mirror: "rancher/mirrored-library-busybox", Tags: []string{"1.36.1"}},
+		"quay.io/coreos/prometheus-operator":            images.MirrorRef{Mirror: "rancher/mirrored-coreos-prometheus-operator", Tags: []string{"v0.40.0"}},
+		"registry.k8s.io/metrics-server/metrics-server": images.MirrorRef{Mirror: "rancher/mirrored-metrics-server", Tags: []string{"v0.7.1"}},
 	}
 
-	assertMirrorRefSlice(t, expected, list)
+	assertMirrorList(t, expected, list)
 }
 
-func TestMirrorForImage(t *testing.T) {
+func TestMirrorForSource(t *testing.T) {
 	type TestCase struct {
-		Name string
-
-		Namespace  string
-		Repository string
-		Tag        string
-
-		Expected images.MirrorRef
-		Error    error
+		Name   string
+		Source string
+		Mirror string
+		Error  error
 	}
+
+	var namespace = "rancher"
 
 	testCases := []TestCase{
 		{
-			Name: "BasicCase",
-
-			Namespace:  "rancher",
-			Repository: "rancher/rancher",
-			Tag:        "v2.9.0",
-
-			Expected: images.MirrorRef{
-				Source:      "rancher/rancher",
-				Destination: "rancher/mirrored-rancher-rancher",
-				Tag:         "v2.9.0",
-			},
+			Name:   "NoRegistry",
+			Source: "upstream/subcomponent",
+			Mirror: "rancher/mirrored-upstream-subcomponent",
 		},
 		{
-			Name: "WithSourceRegistry",
-
-			Namespace:  "rancher",
-			Repository: "some.registry/rancher/rancher",
-			Tag:        "v2.9.0",
-
-			Expected: images.MirrorRef{
-				Source:      "some.registry/rancher/rancher",
-				Destination: "rancher/mirrored-rancher-rancher",
-				Tag:         "v2.9.0",
-			},
+			Name:   "WithRegistry",
+			Source: "quay.io/upstream/subcomponent",
+			Mirror: "rancher/mirrored-upstream-subcomponent",
 		},
 		{
-			Name:       "AlreadyMirrored",
-			Repository: "rancher/mirrored-upstream-subcomponent",
-			Tag:        "v2.9.0",
-
-			Expected: images.MirrorRef{},
+			Name:   "NoNamespace",
+			Source: "subcomponent",
+			Error:  fmt.Errorf("repository 'subcomponent' does not contain a namespace"),
 		},
 		{
-			Name: "NoRepositoryNamespace",
-
-			Namespace:  "rancher",
-			Repository: "rancher",
-			Tag:        "v2.9.0",
-
-			Error: fmt.Errorf("repository rancher does not contain a namespace"),
-		},
-		{
-			Name: "TooManyComponents",
-
-			Namespace:  "rancher",
-			Repository: "rancher/rancher/rancher/rancher",
-			Tag:        "v2.9.0",
-
-			Error: fmt.Errorf("repository 'rancher/rancher/rancher/rancher' has too many components"),
+			Name:   "TooManyComponents",
+			Source: "quay.io/upstream/subcomponent/extra",
+			Error:  fmt.Errorf("repository 'quay.io/upstream/subcomponent/extra' has too many components"),
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.Name, func(t *testing.T) {
-			actual, err := images.MirrorForSource(c.Namespace, c.Repository, c.Tag)
-			if err != nil {
-				if err.Error() != c.Error.Error() {
-					t.Errorf("did not receive the expected error:\nexpected: %v\n  actual: %v", c.Error, err)
-				}
+			actual, err := images.MirrorForSource(namespace, c.Source)
+			if err != nil && err.Error() != c.Error.Error() {
+
+				t.Errorf("expected error '%s', got '%s'", c.Error, err)
+				return
 			}
 
-			if actual != c.Expected {
-				t.Errorf("unexpected mirror for repository:\nexpected: %v\n  actual: %v", c.Expected, actual)
+			if actual != c.Mirror {
+				t.Errorf("expected mirror '%s', got '%s'", c.Mirror, actual)
+				return
 			}
 		})
 	}
+
 }
 
 func TestGetMissingMirrors(t *testing.T) {
@@ -138,18 +130,16 @@ func TestGetMissingMirrors(t *testing.T) {
 		"rancher/mirrored-upstream-subcomponent": {"v0.0.4"},
 	}
 
-	mirrors := []images.MirrorRef{
-		{Source: "rancher/rancher", Destination: "rancher/mirrored-rancher-rancher", Tag: "v2.8.0"},
-		{Source: "upstream/subcomponent", Destination: "rancher/mirrored-upstream-subcomponent", Tag: "v0.0.0"},
-		{Source: "upstream/subcomponent", Destination: "rancher/mirrored-upstream-subcomponent", Tag: "v0.0.1"},
-		{Source: "upstream/subsubcomponent", Destination: "rancher/mirrored-upstream-subsubcomponent", Tag: "v0.0.3"},
+	mirrors := images.MirrorList{
+		"rancher/rancher":          images.MirrorRef{Mirror: "rancher/mirrored-rancher-rancher", Tags: []string{"v2.8.0"}},
+		"upstream/subcomponent":    images.MirrorRef{Mirror: "rancher/mirrored-upstream-subcomponent", Tags: []string{"v0.0.0", "v0.0.1"}},
+		"upstream/subsubcomponent": images.MirrorRef{Mirror: "rancher/mirrored-upstream-subsubcomponent", Tags: []string{"v0.0.3"}},
 	}
 
-	expected := []images.MirrorRef{
-		{Source: "rancher/rancher", Destination: "rancher/mirrored-rancher-rancher", Tag: "v2.9.0"},
-		{Source: "upstream/subcomponent", Destination: "rancher/mirrored-upstream-subcomponent", Tag: "v0.0.3"},
-		{Source: "upstream/something-new", Destination: "rancher/mirrored-upstream-something-new", Tag: "v0.0.0"},
-		{Source: "upstream/subcomponent", Destination: "rancher/mirrored-upstream-subcomponent", Tag: "v0.0.4"},
+	expected := images.MirrorList{
+		"rancher/rancher":        images.MirrorRef{Mirror: "rancher/mirrored-rancher-rancher", Tags: []string{"v2.9.0"}},
+		"upstream/subcomponent":  images.MirrorRef{Mirror: "rancher/mirrored-upstream-subcomponent", Tags: []string{"v0.0.3", "v0.0.4"}},
+		"upstream/something-new": images.MirrorRef{Mirror: "rancher/mirrored-upstream-something-new", Tags: []string{"v0.0.0"}},
 	}
 
 	actual, err := images.GetMissingMirrorRefs("rancher", imageList, mirrors)
@@ -157,5 +147,38 @@ func TestGetMissingMirrors(t *testing.T) {
 		t.Errorf("unexpected error: %s", err.Error())
 	}
 
-	assertMirrorRefSlice(t, expected, actual)
+	assertMirrorList(t, expected, actual)
+}
+
+func TestRepositoryIsMirror(t *testing.T) {
+	type TestCase struct {
+		Name       string
+		Repository string
+		Expected   bool
+	}
+
+	testCases := []TestCase{
+		{
+			Name:       "IsMirror",
+			Repository: "rancher/mirrored-rancher-rancher",
+			Expected:   true,
+		},
+		{
+			Name:       "IsNotMirror",
+			Repository: "rancher/rancher",
+		},
+		{
+			Name:       "HasRegistry",
+			Repository: "quay.io/upstream/mirrored-subcomponent",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.Name, func(t *testing.T) {
+			actual := images.RepositoryIsMirror(c.Repository)
+			if actual != c.Expected {
+				t.Errorf("expected '%v' but found '%v' for '%s'", c.Expected, actual, c.Repository)
+			}
+		})
+	}
 }
