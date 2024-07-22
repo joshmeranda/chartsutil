@@ -689,6 +689,8 @@ github.com/rancher/charts-build-scripts v0.9.3 h1:Vn/UxuGvzou8ZTbucwj4SGv3BoeZ8/
 github.com/rancher/charts-build-scripts v0.9.3/go.mod h1:qgCPhyIV7ltE11wGF040fjlawXtDu23prEgFYWOYkeA=
 github.com/rancher/charts-build-scripts v0.9.4 h1:nti8Q+R7HwpLr0SixxiPtDW26sSoDE2oF3EFmWuEvBk=
 github.com/rancher/charts-build-scripts v0.9.4/go.mod h1:qgCPhyIV7ltE11wGF040fjlawXtDu23prEgFYWOYkeA=
+github.com/rancher/charts-build-scripts v0.9.5 h1:qXnnatpA2tR1NVn5ER8FhdP2sqSLsQeOLQ3m+syx1+Y=
+github.com/rancher/charts-build-scripts v0.9.5/go.mod h1:qgCPhyIV7ltE11wGF040fjlawXtDu23prEgFYWOYkeA=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.2.0 h1:S1pD9weZBuJdFmowNwbpi7BJ8TNftyUImj/0WQi72jY=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
