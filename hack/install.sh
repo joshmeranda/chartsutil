@@ -13,7 +13,7 @@ if [ -z "$VERSION" ]; then
 
 	case "$CHARTS_BUILD_SCRIPT_VERSION" in
 		v0.9.2 )
-			VERSION=v0.0.2
+			VERSION=v0.1.0
 			;;
 		* )
 			echo "Unsupported version $CHARTS_BUILD_SCRIPT_VERSION"
