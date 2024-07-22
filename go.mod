@@ -10,7 +10,7 @@ replace k8s.io/client-go => k8s.io/client-go v0.24.3
 require (
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/google/go-github v17.0.0+incompatible
-	github.com/rancher/charts-build-scripts v0.9.3
+	github.com/rancher/charts-build-scripts v0.9.4
 	github.com/urfave/cli/v2 v2.27.1
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 	helm.sh/helm/v3 v3.9.1
