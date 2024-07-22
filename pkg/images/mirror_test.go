@@ -8,17 +8,17 @@ import (
 	"github.com/joshmeranda/chartsutil/pkg/images"
 )
 
-func assertMirrorRef(t *testing.T, expected images.MirrorRef, actual images.MirrorRef) bool {
+func assertMirrorRef(t *testing.T, expected images.SourceRef, actual images.SourceRef) bool {
 	t.Helper()
 
-	if expected.Mirror != actual.Mirror {
-		t.Errorf("expected mirror %s, got %s", expected.Mirror, actual.Mirror)
+	if expected.Source != actual.Source {
+		t.Errorf("expected mirror %s, got %s", expected.Source, actual.Source)
 		return false
 	}
 
 	for _, expectedTag := range expected.Tags {
 		if !slices.Contains(actual.Tags, expectedTag) {
-			t.Errorf("expected mirror %s, got %s", expected.Mirror, actual.Mirror)
+			t.Errorf("expected mirror %s, got %s", expected.Source, actual.Source)
 			return false
 		}
 	}
@@ -30,7 +30,7 @@ func assertMirrorList(t *testing.T, expected images.MirrorList, actual images.Mi
 	t.Helper()
 
 	if len(expected) != len(actual) {
-		t.Errorf("expected %d refs, got %d", len(expected), len(actual))
+		t.Errorf("expected %d refs, got %d:\nexpected: %v\n  actual: %v", len(expected), len(actual), expected, actual)
 		return
 	}
 
@@ -38,11 +38,46 @@ func assertMirrorList(t *testing.T, expected images.MirrorList, actual images.Mi
 		actualImage, found := actual[expectedImage]
 		if !found {
 			t.Errorf("actual mirror list does not match expected:\nexpected: %v\n  actual: %v", expected, actual)
+			return
 		}
 
 		if !assertMirrorRef(t, expectedRef, actualImage) {
 			t.Errorf("actual mirror list does not match expected:\nexpected: %v\n  actual: %v", expected, actual)
+			return
 		}
+	}
+}
+
+func TestMirrorListAddMirror(t *testing.T) {
+	list := images.MirrorList{}
+
+	list.AddMirror("upstream/subcomponent", "rancher/mirrored-upstream-subcomponent", "v0.0.0")
+	list.AddMirror("upstream/subcomponent", "rancher/mirrored-upstream-subcomponent", "v0.0.1")
+
+	expected := images.MirrorList{
+		"rancher/mirrored-upstream-subcomponent": images.SourceRef{
+			Source: "upstream/subcomponent",
+			Tags:   []string{"v0.0.0", "v0.0.1"},
+		},
+	}
+
+	assertMirrorList(t, expected, list)
+}
+
+func TestMirrorListHasMirror(t *testing.T) {
+	list := images.MirrorList{
+		"rancher/mirrored-upstream-subcomponent": images.SourceRef{
+			Source: "upstream/subcomponent",
+			Tags:   []string{"v0.0.0", "v0.0.1"},
+		},
+	}
+
+	if !list.HasMirror("upstream/subcomponent", "rancher/mirrored-upstream-subcomponent", "v0.0.0") {
+		t.Errorf("expected mirror to be found")
+	}
+
+	if list.HasMirror("upstream/subcomponent", "rancher/mirrored-upstream-subcomponent", "v0.0.2") {
+		t.Errorf("expected mirror to not be found")
 	}
 }
 
@@ -53,6 +88,9 @@ library/busybox rancher/mirrored-library-busybox 1.36.1
 
 quay.io/coreos/prometheus-operator rancher/mirrored-coreos-prometheus-operator v0.40.0
 registry.k8s.io/metrics-server/metrics-server rancher/mirrored-metrics-server v0.7.1
+
+jimmidyson/config-reloader rancher/jimmidyson-config-reloader v0.0.1
+jimmidyson/config-reloader rancher/mirrored-jimmidyson-config-reloader v0.0.2
 `)
 
 	list, err := images.UnmarshalImagesList(data)
@@ -61,10 +99,12 @@ registry.k8s.io/metrics-server/metrics-server rancher/mirrored-metrics-server v0
 	}
 
 	expected := images.MirrorList{
-		"rancher/rancher":                               images.MirrorRef{Mirror: "rancher/mirrored-rancher-rancher", Tags: []string{"v2.9.0"}},
-		"library/busybox":                               images.MirrorRef{Mirror: "rancher/mirrored-library-busybox", Tags: []string{"1.36.1"}},
-		"quay.io/coreos/prometheus-operator":            images.MirrorRef{Mirror: "rancher/mirrored-coreos-prometheus-operator", Tags: []string{"v0.40.0"}},
-		"registry.k8s.io/metrics-server/metrics-server": images.MirrorRef{Mirror: "rancher/mirrored-metrics-server", Tags: []string{"v0.7.1"}},
+		"rancher/mirrored-rancher-rancher":            images.SourceRef{Source: "rancher/rancher", Tags: []string{"v2.9.0"}},
+		"rancher/mirrored-library-busybox":            images.SourceRef{Source: "library/busybox", Tags: []string{"1.36.1"}},
+		"rancher/mirrored-coreos-prometheus-operator": images.SourceRef{Source: "quay.io/coreos/prometheus-operator", Tags: []string{"v0.40.0"}},
+		"rancher/mirrored-metrics-server":             images.SourceRef{Source: "registry.k8s.io/metrics-server/metrics-server", Tags: []string{"v0.7.1"}},
+		"rancher/jimmidyson-config-reloader":          images.SourceRef{Source: "jimmidyson/config-reloader", Tags: []string{"v0.0.1"}},
+		"rancher/mirrored-jimmidyson-config-reloader": images.SourceRef{Source: "jimmidyson/config-reloader", Tags: []string{"v0.0.2"}},
 	}
 
 	assertMirrorList(t, expected, list)
@@ -118,12 +158,11 @@ func TestMirrorForSource(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestGetMissingMirrors(t *testing.T) {
 	imageList := images.ImageList{
-		"rancher/rancher":                        {"v2.9.0"},
+		"rancher/fluent-bit":                     {"2.2.0"},
 		"upstream/subcomponent":                  {"v0.0.3"},
 		"upstream/subsubcomponent":               {"v0.0.3"},
 		"upstream/something-new":                 {"v0.0.0"},
@@ -131,15 +170,13 @@ func TestGetMissingMirrors(t *testing.T) {
 	}
 
 	mirrors := images.MirrorList{
-		"rancher/rancher":          images.MirrorRef{Mirror: "rancher/mirrored-rancher-rancher", Tags: []string{"v2.8.0"}},
-		"upstream/subcomponent":    images.MirrorRef{Mirror: "rancher/mirrored-upstream-subcomponent", Tags: []string{"v0.0.0", "v0.0.1"}},
-		"upstream/subsubcomponent": images.MirrorRef{Mirror: "rancher/mirrored-upstream-subsubcomponent", Tags: []string{"v0.0.3"}},
+		"rancher/mirrored-upstream-subcomponent":    images.SourceRef{Source: "upstream/subcomponent", Tags: []string{"v0.0.0", "v0.0.1"}},
+		"rancher/mirrored-upstream-subsubcomponent": images.SourceRef{Source: "upstream/subsubcomponent", Tags: []string{"v0.0.3"}},
 	}
 
 	expected := images.MirrorList{
-		"rancher/rancher":        images.MirrorRef{Mirror: "rancher/mirrored-rancher-rancher", Tags: []string{"v2.9.0"}},
-		"upstream/subcomponent":  images.MirrorRef{Mirror: "rancher/mirrored-upstream-subcomponent", Tags: []string{"v0.0.3", "v0.0.4"}},
-		"upstream/something-new": images.MirrorRef{Mirror: "rancher/mirrored-upstream-something-new", Tags: []string{"v0.0.0"}},
+		"rancher/mirrored-upstream-subcomponent":  images.SourceRef{Source: "upstream/subcomponent", Tags: []string{"v0.0.3", "v0.0.4"}},
+		"rancher/mirrored-upstream-something-new": images.SourceRef{Source: "upstream/something-new", Tags: []string{"v0.0.0"}},
 	}
 
 	actual, err := images.GetMissingMirrorRefs("rancher", imageList, mirrors)

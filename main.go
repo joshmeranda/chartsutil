@@ -274,8 +274,10 @@ func imagesMirror(ctx *cli.Context) error {
 		return fmt.Errorf("failed to get missing mirrors: %w", err)
 	}
 
-	for _, mirror := range newMirrors {
-		fmt.Println(mirror)
+	for destination, sourceRef := range newMirrors {
+		for _, tag := range sourceRef.Tags {
+			fmt.Printf("%s %s %s\n", sourceRef.Source, destination, tag)
+		}
 	}
 
 	return nil
