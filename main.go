@@ -38,7 +38,7 @@ const (
 var (
 	logger *slog.Logger
 
-	Version = "v0.1.3"
+	Version = "v0.1.4"
 )
 
 func setup(ctx *cli.Context) error {
@@ -84,7 +84,9 @@ func pkgRebase(ctx *cli.Context) error {
 
 	pkg, err := charts.GetPackage(rootFs, pkgName)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get package '%s': %w", pkgName, err)
+	} else if pkg == nil {
+		return fmt.Errorf("failed to get package '%s': no such package", pkgName)
 	}
 
 	delta := iter.UpstreamDelta{}
@@ -163,7 +165,9 @@ func upstreamCheck(ctx *cli.Context) error {
 
 	pkg, err := charts.GetPackage(rootFs, pkgName)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get package '%s': %w", pkgName, err)
+	} else if pkg == nil {
+		return fmt.Errorf("failed to get package '%s': no such package", pkgName)
 	}
 
 	pullOpts := pkg.Chart.Upstream.GetOptions()
@@ -234,7 +238,9 @@ func imagesMirror(ctx *cli.Context) error {
 
 	pkg, err := charts.GetPackage(rootFs, pkgName)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get package '%s': %w", pkgName, err)
+	} else if pkg == nil {
+		return fmt.Errorf("failed to get package '%s': no such package", pkgName)
 	}
 
 	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
