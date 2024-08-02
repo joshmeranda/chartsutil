@@ -46,6 +46,16 @@ func (m MirrorList) HasMirror(source string, destination string, tag string) boo
 	return false
 }
 
+func (m MirrorList) DestinationForSource(source string) (string, bool) {
+	for destination, sourceRef := range m {
+		if sourceRef.Source == source {
+			return destination, true
+		}
+	}
+
+	return "", false
+}
+
 func UnmarshalImagesList(data []byte) (MirrorList, error) {
 	reader := bytes.NewReader(data)
 	scanner := bufio.NewScanner(reader)
@@ -101,6 +111,8 @@ func RepositoryIsMirror(repository string) bool {
 }
 
 func GetMissingMirrorRefs(namespace string, images ImageList, mirrors MirrorList) (MirrorList, error) {
+	var err error
+
 	newMirrors := MirrorList{}
 
 	for repository, tags := range images {
@@ -114,9 +126,13 @@ func GetMissingMirrorRefs(namespace string, images ImageList, mirrors MirrorList
 			continue
 		}
 
-		mirror, err := MirrorForSource(namespace, repository)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create mirror for source repository '%s': %w", repository, err)
+		mirror, found := mirrors.DestinationForSource(repository)
+
+		if !found {
+			mirror, err = MirrorForSource(namespace, repository)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create mirror for source repository '%s': %w", repository, err)
+			}
 		}
 
 		for _, tag := range tags {

@@ -81,6 +81,28 @@ func TestMirrorListHasMirror(t *testing.T) {
 	}
 }
 
+func TestMirrorListDestinationForSource(t *testing.T) {
+	list := images.MirrorList{
+		"rancher/mirrored-upstream-subcomponent": images.SourceRef{
+			Source: "upstream-community/subcomponent",
+			Tags:   []string{"v0.0.0", "v0.0.1"},
+		},
+	}
+
+	actual, found := list.DestinationForSource("upstream-community/subcomponent")
+	if !found {
+		t.Errorf("expected mirror to be found")
+	}
+	if actual != "rancher/mirrored-upstream-subcomponent" {
+		t.Errorf("expected mirror rancher/mirrored-upstream-subcomponent, got %s", actual)
+	}
+
+	_, found = list.DestinationForSource("upstream/subcomponent")
+	if found {
+		t.Errorf("expected mirror to not be found")
+	}
+}
+
 func TestUnarshalImagesList(t *testing.T) {
 	data := []byte(`# this is a comment that should be ignored
 rancher/rancher rancher/mirrored-rancher-rancher v2.9.0
@@ -177,6 +199,27 @@ func TestGetMissingMirrors(t *testing.T) {
 	expected := images.MirrorList{
 		"rancher/mirrored-upstream-subcomponent":  images.SourceRef{Source: "upstream/subcomponent", Tags: []string{"v0.0.3", "v0.0.4"}},
 		"rancher/mirrored-upstream-something-new": images.SourceRef{Source: "upstream/something-new", Tags: []string{"v0.0.0"}},
+	}
+
+	actual, err := images.GetMissingMirrorRefs("rancher", imageList, mirrors)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err.Error())
+	}
+
+	assertMirrorList(t, expected, actual)
+}
+
+func TestGetMissingMirrorsWithDifferingDestination(t *testing.T) {
+	imageList := images.ImageList{
+		"upstream-community/subcomponent": {"v0.0.2"},
+	}
+
+	mirrors := images.MirrorList{
+		"rancher/mirrored-upstream-subcomponent": images.SourceRef{Source: "upstream-community/subcomponent", Tags: []string{"v0.0.0", "v0.0.1"}},
+	}
+
+	expected := images.MirrorList{
+		"rancher/mirrored-upstream-subcomponent": images.SourceRef{Source: "upstream-community/subcomponent", Tags: []string{"v0.0.2"}},
 	}
 
 	actual, err := images.GetMissingMirrorRefs("rancher", imageList, mirrors)
