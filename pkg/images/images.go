@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+	"k8s.io/utils/strings/slices"
 )
 
 type ImageList map[string][]string
@@ -46,7 +47,10 @@ func GetImagesFromValuesContent(data []byte) (ImageList, error) {
 			return
 		}
 
-		images[repo] = append(images[repo], tag)
+		// todo: can probably do this more efficiently, but this will be fine for most cases
+		if !slices.Contains(images[repo], tag) {
+			images[repo] = append(images[repo], tag)
+		}
 	})
 
 	return images, nil
@@ -83,8 +87,9 @@ func GetImagesFromChart(path string) (ImageList, error) {
 			}
 
 			for repo, tags := range subchartImages {
-				// todo: might have duplicates
-				imagesList[repo] = append(imagesList[repo], tags...)
+				imagesList[repo] = slices.Filter(imagesList[repo], tags, func(tag string) bool {
+					return !slices.Contains(imagesList[repo], tag)
+				})
 			}
 		}
 	}

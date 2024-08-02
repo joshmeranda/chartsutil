@@ -37,6 +37,10 @@ subSubComponent:
   image:
     repository: upstream/subsubcomponent
     tag: ""
+
+repeatedImages:
+  - repository: rancher/rancher
+    tag: v2.8.0
 `)
 
 func assertImageMaps(t *testing.T, actual images.ImageList, expected images.ImageList) {
