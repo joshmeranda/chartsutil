@@ -1,6 +1,7 @@
 package images
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,7 +63,33 @@ func GetImagesFromValuesFile(path string) (ImageList, error) {
 
 func GetImagesFromChart(path string) (ImageList, error) {
 	valuesFile := filepath.Join(path, "values.yaml")
-	return GetImagesFromValuesFile(valuesFile)
+	imagesList, err := GetImagesFromValuesFile(valuesFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get images from main chart: %w", err)
+	}
+
+	subchartDir := filepath.Join(path, "charts")
+	entries, err := os.ReadDir(subchartDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to read subchart directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			subchartPath := filepath.Join(subchartDir, entry.Name())
+			subchartImages, err := GetImagesFromChart(subchartPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get images from subchart '%s': %w", entry.Name(), err)
+			}
+
+			for repo, tags := range subchartImages {
+				// todo: might have duplicates
+				imagesList[repo] = append(imagesList[repo], tags...)
+			}
+		}
+	}
+
+	return imagesList, nil
 }
 
 func RepositoryInNamespace(repository string, namespace string) bool {
