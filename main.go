@@ -46,6 +46,15 @@ func setup(ctx *cli.Context) error {
 		logrus.SetOutput(io.Discard)
 	}
 
+	absChartsDir, err := filepath.Abs(".")
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for charts dir: %w", err)
+	}
+
+	if err := ctx.Set("charts-dir", absChartsDir); err != nil {
+		return fmt.Errorf("failed to set absolute path for charts dir: %w", err)
+	}
+
 	var out io.Writer
 
 	out = os.Stdout
@@ -339,7 +348,7 @@ func main() {
 								Category: CategoryPatternMatching,
 							},
 							&cli.StringFlag{
-								Name:     "postfux",
+								Name:     "postfix",
 								Aliases:  []string{"sufix"},
 								Usage:    "postfix to add to the release pattern",
 								Category: CategoryPatternMatching,
