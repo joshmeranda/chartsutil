@@ -1,6 +1,7 @@
 package rebase_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	BadHelmTemplateContent = `{{ if .global.something.bad }}`
+	BadHelmTemplateContent = `{{ if .something.bad }}`
 )
 
 func setupVerify(t *testing.T, pkgName string) (*charts.Package, *git.Worktree, billy.Filesystem) {
@@ -78,6 +79,21 @@ func corruptHelm(chartPath string) error {
 	return nil
 }
 
+func replaceInValues(chartPath string, oldValue string, newValue string) error {
+	valuesPath := filepath.Join(chartPath, "values.yaml")
+	data, err := os.ReadFile(valuesPath)
+	if err != nil {
+		return err
+	}
+
+	data = bytes.ReplaceAll(data, []byte(oldValue), []byte(newValue))
+	if err := os.WriteFile(valuesPath, data, 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func TestValidateHelmLint(t *testing.T) {
 	pkg, wt, pkgFs := setupVerify(t, "chartsutil-example-archive")
 
@@ -101,9 +117,9 @@ func TestValidateHelmLint(t *testing.T) {
 func TestValidatePatternNotFound(t *testing.T) {
 	pkg, wt, pkgFs := setupVerify(t, "chartsutil-example-archive")
 
-	verifyFunc := rebase.ValidatePatternNotFoundFactory(".something.bad")
+	validateFunc := rebase.ValidatePatternNotFoundFactory(".something.bad")
 
-	if err := verifyFunc(pkg, wt, pkgFs); err != nil {
+	if err := validateFunc(pkg, wt, pkgFs); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -111,12 +127,30 @@ func TestValidatePatternNotFound(t *testing.T) {
 		t.Fatalf("failed to corrupt helm template: %v", err)
 	}
 
-	if err := verifyFunc(pkg, wt, pkgFs); err == nil {
-		if !errors.Is(err, rebase.ValidateError{}) {
-			t.Fatalf("expected ValidateError, got %T", err)
-		}
-
+	if err := validateFunc(pkg, wt, pkgFs); err == nil {
 		t.Fatalf("expected error, got nil")
+	} else if !errors.Is(err, rebase.ValidateError{}) {
+		t.Fatalf("expected ValidateError, got %T", err)
+	}
+}
+
+func TestValidateImagesInNamespaceFactory(t *testing.T) {
+	pkg, wt, pkgFs := setupVerify(t, "chartsutil-example-archive")
+
+	validateFunc := rebase.ValidateImagesInNamespaceFactory("rancher")
+
+	if err := validateFunc(pkg, wt, pkgFs); err == nil {
+		t.Fatalf("expected error, got nil")
+	} else if !errors.Is(err, rebase.ValidateError{}) {
+		t.Fatalf("expected ValidateError, got %T", err)
+	}
+
+	if err := replaceInValues(filepath.Join(pkgFs.Root(), pkg.WorkingDir), "repository: nginx", "repository: rancher/mirrored-nginx"); err != nil {
+		t.Fatal("failed to replace image repository")
+	}
+
+	if err := validateFunc(pkg, wt, pkgFs); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 

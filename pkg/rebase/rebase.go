@@ -33,8 +33,7 @@ func init() {
 	logging.SetLevel(level, "yq-lib")
 }
 
-// todo: NICE TO HAVE might be a good idea to add some prefix to thesae branch names
-// todo: MUST ensure that there are no empty commits when cherry-picking
+// todo: NICE TO HAVE might be a good idea to add some suffix to thesae branch names
 
 const (
 	// ChartsStagingBranchName is the name of the branch used to stage changes for user interaction / review.

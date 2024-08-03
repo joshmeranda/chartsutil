@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5"
+	"github.com/joshmeranda/chartsutil/pkg/images"
 	"github.com/rancher/charts-build-scripts/pkg/charts"
 	chartspath "github.com/rancher/charts-build-scripts/pkg/path"
 	"helm.sh/helm/v3/pkg/action"
@@ -156,4 +157,26 @@ func ValidateWorktree(pkg *charts.Package, wt *git.Worktree, _ billy.Filesystem)
 	}
 
 	return nil
+}
+
+func ValidateImagesInNamespaceFactory(namespace string) PackageValidateFunc {
+	return func(pkg *charts.Package, wt *git.Worktree, pkgFs billy.Filesystem) error {
+		return ForEachChart(pkg, pkgFs, func(chartPath string) error {
+			imagesList, err := images.GetImagesFromChart(chartPath)
+			if err != nil {
+				return fmt.Errorf("failed to validate all image are within namespace")
+			}
+
+			for image := range imagesList {
+				if !images.RepositoryInNamespace(image, namespace) {
+					return &ValidateError{
+						chart: chartPath,
+						inner: fmt.Errorf("image '%s' is not in namespace '%s'", image, namespace),
+					}
+				}
+			}
+
+			return nil
+		})
+	}
 }

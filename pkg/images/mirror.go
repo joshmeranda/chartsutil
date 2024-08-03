@@ -9,7 +9,6 @@ import (
 )
 
 // MirrorRef is a struct that represents each mirror from the rancher/image-mirror images-list file.
-// todo: might be a good idea to make this an ImageList
 type SourceRef struct {
 	Source string
 	Tags   []string
