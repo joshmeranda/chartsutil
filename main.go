@@ -38,7 +38,7 @@ const (
 var (
 	logger *slog.Logger
 
-	Version = "v0.1.7"
+	Version = "v0.1.8"
 )
 
 func setup(ctx *cli.Context) error {
