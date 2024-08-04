@@ -35,3 +35,4 @@ Each time after an upstream is merged but before changes are commited, we run so
 1. Lint each prepared chart (and additional chart), same as `helm lint`
 2. Check the worktree for instances of `<<<<<<< HEAD` to ensure all merge conflicts have been handled
 3. Ensure only changes to the prepared charts have been staged
+4. Ensure all chart images are within a specific namespace (`rancher` by default)
