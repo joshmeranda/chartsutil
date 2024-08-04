@@ -51,6 +51,7 @@ type Options struct {
 	Resolver          resolve.Resolver
 	EnableBackup      bool
 	DisableValidators bool
+	ImageNamespace    string
 }
 
 type Rebase struct {
@@ -99,11 +100,14 @@ func NewRebase(pkg *charts.Package, rootFs billy.Filesystem, pkgFs billy.Filesys
 	if opts.DisableValidators {
 		validators = []PackageValidateFunc{}
 	} else {
-		// todo: check for images in rancher namespace
 		validators = []PackageValidateFunc{
 			ValidateWorktree,
 			ValidatePatternNotFoundFactory("<<<<<<< HEAD"),
 			ValidateHelmLint,
+		}
+
+		if opts.ImageNamespace != "" {
+			validators = append(validators, ValidateImagesInNamespaceFactory(opts.ImageNamespace))
 		}
 	}
 

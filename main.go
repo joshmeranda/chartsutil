@@ -78,6 +78,7 @@ func pkgRebase(ctx *cli.Context) error {
 	chartsDir := ctx.String("charts-dir")
 	incremental := ctx.Bool("increment")
 	backup := ctx.Bool("backup")
+	imageNamespcae := ctx.String("image-namespace")
 
 	rootFs := filesystem.GetFilesystem(chartsDir)
 	pkgFs, err := rootFs.Chroot(filepath.Join(chartspath.RepositoryPackagesDir, pkgName))
@@ -127,8 +128,9 @@ func pkgRebase(ctx *cli.Context) error {
 	}
 
 	opts := rebase.Options{
-		Logger:       logger,
-		EnableBackup: backup,
+		Logger:         logger,
+		EnableBackup:   backup,
+		ImageNamespace: imageNamespcae,
 	}
 
 	rb, err := rebase.NewRebase(pkg, rootFs, pkgFs, upstreamIter, opts)
@@ -379,6 +381,11 @@ func main() {
 						Name:     "commit",
 						Usage:    "the commit to rebase to",
 						Category: CategoryUpstreamSpec,
+					},
+					&cli.StringFlag{
+						Name:  "image-namespace",
+						Usage: "the namespace to enforce for all chart images, set to '' to disable this check",
+						Value: "rancher",
 					},
 					&cli.StringFlag{
 						Name:     "url",
