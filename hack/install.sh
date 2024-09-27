@@ -24,18 +24,19 @@ if [ -z "$VERSION" ]; then
 		v0.9.5 )
 			VERSION=v0.1.8
 			;;
-		v0.9.6)
+		v0.9.6 )
 			VERSION=v0.1.9
-		v0.9.7)
+			;;
+		v0.9.7 )
 			VERSION=v0.1.10
 			;;
-		v0.9.8)
+		v0.9.8 )
 			VERSION=v0.1.11
 			;;
-		v0.9.9)
+		v0.9.9 )
 			VERSION=v0.1.12
 			;;
-		v1.0.0)
+		v1.0.0 )
 			VERSION=v0.1.13
 			;;
 		* )
