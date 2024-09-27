@@ -1,6 +1,8 @@
 module github.com/joshmeranda/chartsutil
 
-go 1.21.3
+go 1.23
+
+toolchain go1.23.1
 
 // Needed to resolve issue on Darwin machines
 // https://github.com/ory/dockertest/issues/208#issuecomment-686820414
@@ -10,7 +12,7 @@ replace k8s.io/client-go => k8s.io/client-go v0.24.3
 require (
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/google/go-github v17.0.0+incompatible
-	github.com/rancher/charts-build-scripts v0.9.8
+	github.com/rancher/charts-build-scripts v0.9.9
 	github.com/urfave/cli/v2 v2.27.1
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 	helm.sh/helm/v3 v3.9.1
@@ -22,7 +24,7 @@ require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.1.1 // indirect
+	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.2 // indirect
 	github.com/Masterminds/squirrel v1.5.3 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
