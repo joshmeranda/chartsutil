@@ -24,6 +24,8 @@ if [ -z "$VERSION" ]; then
 		v0.9.5 )
 			VERSION=v0.1.8
 			;;
+		v0.9.6)
+			VERSION=v0.1.9
 		* )
 			echo "Unsupported version $CHARTS_BUILD_SCRIPT_VERSION"
 			exit 1
