@@ -682,8 +682,8 @@ github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1
 github.com/prometheus/procfs v0.7.3 h1:4jVXhlkAyzOScmCkXBTOLRLTz8EeU+eyjrwB/EPq0VU=
 github.com/prometheus/procfs v0.7.3/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1xBZuNvfVA=
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
-github.com/rancher/charts-build-scripts v0.9.9 h1:aFWLUWeLiaxmZ5ayvTew4Bai+goDTrlNsqNg8DE7qcw=
-github.com/rancher/charts-build-scripts v0.9.9/go.mod h1:+Mox050oxtTEVGUuvqrvBL/BnGUlfYm5feeET5ivbEg=
+github.com/rancher/charts-build-scripts v1.0.0 h1:AFlBTse2gT8PXHxs+mrGjfFfMfvGlU1y4g0UeOIoIGg=
+github.com/rancher/charts-build-scripts v1.0.0/go.mod h1:OaanDTU5L3pqwBnmNwaDztFEK/QBUc6tehcbSlAkzAE=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.2.0 h1:S1pD9weZBuJdFmowNwbpi7BJ8TNftyUImj/0WQi72jY=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
