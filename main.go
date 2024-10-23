@@ -46,7 +46,8 @@ func setup(ctx *cli.Context) error {
 		logrus.SetOutput(io.Discard)
 	}
 
-	absChartsDir, err := filepath.Abs(".")
+	chartsDir := ctx.String("charts-dir")
+	absChartsDir, err := filepath.Abs(chartsDir)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for charts dir: %w", err)
 	}
